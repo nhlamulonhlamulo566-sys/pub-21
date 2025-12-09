@@ -1,8 +1,6 @@
 import type {NextConfig} from 'next';
-import withPWA from 'next-pwa';
-import { join } from 'path';
 
-const nextConfig: NextConfig = withPWA({
+const nextConfig: NextConfig = {
   /* config options here */
   typescript: {
     ignoreBuildErrors: true,
@@ -32,12 +30,6 @@ const nextConfig: NextConfig = withPWA({
       },
     ],
   },
-  pwa: {
-    dest: 'public',
-    disable: process.env.NODE_ENV === 'development',
-    register: false,
-    sw: 'service-worker.js',
-  },
-});
+};
 
 export default nextConfig;
