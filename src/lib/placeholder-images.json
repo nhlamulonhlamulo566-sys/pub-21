@@ -1,0 +1,52 @@
+{
+  "placeholderImages": [
+    {
+      "id": "prod_001",
+      "description": "A modern, minimalist wooden chair.",
+      "imageUrl": "https://images.unsplash.com/photo-1634798245965-03669c757183?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwzfHx3b29kZW4lMjBjaGFpcnxlbnwwfHx8fDE3NjQ5NzAxODR8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "wooden chair"
+    },
+    {
+      "id": "prod_002",
+      "description": "A sleek, black ceramic vase.",
+      "imageUrl": "https://images.unsplash.com/photo-1526198049595-f32cde2a219d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw4fHxjZXJhbWljJTIwdmFzZXxlbnwwfHx8fDE3NjQ5MzI1Mzh8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "ceramic vase"
+    },
+    {
+      "id": "prod_003",
+      "description": "A set of three decorative cushions with geometric patterns.",
+      "imageUrl": "https://images.unsplash.com/photo-1643785450216-2f4fb7d38fb6?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw4fHxkZWNvcmF0aXZlJTIwY3VzaGlvbnN8ZW58MHx8fHwxNzY1MDE5NDg0fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "decorative cushions"
+    },
+    {
+      "id": "prod_004",
+      "description": "A large, industrial-style metal desk lamp.",
+      "imageUrl": "https://images.unsplash.com/photo-1621177555452-bedbe4c28879?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwzfHxkZXNrJTIwbGFtcHxlbnwwfHx8fDE3NjQ5OTQ0NzB8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "desk lamp"
+    },
+    {
+      "id": "prod_005",
+      "description": "A hand-woven wool rug with a colorful abstract design.",
+      "imageUrl": "https://images.unsplash.com/photo-1720102438448-ffc151487e5b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHx3b29sJTIwcnVnfGVufDB8fHx8MTc2NTAxOTQ4M3ww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "wool rug"
+    },
+    {
+      "id": "prod_006",
+      "description": "A set of stainless steel kitchen knives on a magnetic block.",
+      "imageUrl": "https://images.unsplash.com/photo-1636412191749-53d84f5f3eb0?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwyfHxraXRjaGVuJTIwa25pdmVzfGVufDB8fHx8MTc2NTAxOTQ4M3ww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "kitchen knives"
+    },
+    {
+      "id": "prod_007",
+      "description": "An elegant glass coffee table with a gold frame.",
+      "imageUrl": "https://images.unsplash.com/photo-1542372147193-a7aca54189cd?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHxjb2ZmZWUlMjB0YWJsZXxlbnwwfHx8fDE3NjQ5Mzc3NzV8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "coffee table"
+    },
+    {
+      "id": "prod_008",
+      "description": "A smart watch with a black silicone strap.",
+      "imageUrl": "https://images.unsplash.com/photo-1461141346587-763ab02bced9?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw2fHxzbWFydCUyMHdhdGNofGVufDB8fHx8MTc2NDk1MTQ0M3ww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "smart watch"
+    }
+  ]
+}
