@@ -34,7 +34,7 @@ const formSchema = z.object({
 
 type FormData = z.infer<typeof formSchema>;
 
-export function LoginForm() {
+export function SignupForm() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const auth = useAuth();
