@@ -50,7 +50,7 @@ export default function DashboardLayout({
           <header className="flex h-14 items-center gap-4 border-b bg-muted/40 px-4 lg:h-[60px] lg:px-6">
             <Skeleton className="h-8 w-8 md:hidden" />
             <div className="w-full flex-1">
-              <Skeleton className="h-8 w-full md:w-2/3 lg:w-1/3" />
+              {/* <Skeleton className="h-8 w-full md:w-2/3 lg:w-1/3" /> */}
             </div>
             <Skeleton className="h-8 w-8 rounded-full" />
           </header>

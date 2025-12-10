@@ -41,7 +41,7 @@ export function PosCart({
   isProcessingSale,
 }: PosCartProps) {
   const [amountPaid, setAmountPaid] = useState(0);
-  const [taxRate, setTaxRate] = useState(0.15); // Default to 15%
+  const [taxRate, setTaxRate] = useState(0); // Default to 0%
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card'>('cash');
   const { toast } = useToast();
 

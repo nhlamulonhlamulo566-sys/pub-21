@@ -107,6 +107,40 @@ function SaleDetails({ sale }: { sale: Sale }) {
   );
 }
 
+function SaleAccordionItem({ sale }: { sale: Sale }) {
+  const firestore = useFirestore();
+  const saleItemsQuery = useMemoFirebase(() => (
+      firestore ? query(collection(firestore, `sales/${sale.id}/items`)) : null
+  ), [firestore, sale.id]);
+  
+  const { data: items } = useCollection(saleItemsQuery);
+  const itemCount = items?.length ?? 0;
+
+  return (
+    <AccordionItem value={sale.id} key={sale.id}>
+      <AccordionTrigger className="hover:no-underline">
+        <div className="grid grid-cols-3 md:grid-cols-4 gap-4 w-full text-sm text-left">
+          <div className="font-medium">
+            {sale.createdAt
+              ? format(sale.createdAt.toDate(), 'yyyy-MM-dd HH:mm')
+              : 'N/A'}
+          </div>
+          <div className="text-muted-foreground">{sale.salespersonName}</div>
+          <div className="text-right font-semibold">
+            R{sale.total.toFixed(2)}
+          </div>
+          <div className="hidden md:block text-right text-muted-foreground">
+            {itemCount} item(s)
+          </div>
+        </div>
+      </AccordionTrigger>
+      <AccordionContent>
+        <SaleDetails sale={sale} />
+      </AccordionContent>
+    </AccordionItem>
+  );
+}
+
 export function SalesList() {
   const firestore = useFirestore();
   const salesQuery = useMemoFirebase(
@@ -147,36 +181,9 @@ export function SalesList() {
               <div className="text-right">Total</div>
               <div className="hidden md:block text-right">Items</div>
             </div>
-            {sales?.map((sale) => {
-              const saleItemsQuery = query(collection(firestore, `sales/${sale.id}/items`));
-              // Note: This is not ideal for performance as it creates a subscription for each sale.
-              // For a large number of sales, consider fetching item counts differently.
-              const { data: items } = useCollection(useMemoFirebase(() => saleItemsQuery, [sale.id]));
-              const itemCount = items?.length ?? 0;
-
-              return (
-              <AccordionItem value={sale.id} key={sale.id}>
-                <AccordionTrigger className="hover:no-underline">
-                  <div className="grid grid-cols-3 md:grid-cols-4 gap-4 w-full text-sm text-left">
-                     <div className="font-medium">
-                      {sale.createdAt
-                        ? format(sale.createdAt.toDate(), 'yyyy-MM-dd HH:mm')
-                        : 'N/A'}
-                    </div>
-                    <div className="text-muted-foreground">{sale.salespersonName}</div>
-                    <div className="text-right font-semibold">
-                      R{sale.total.toFixed(2)}
-                    </div>
-                     <div className="hidden md:block text-right text-muted-foreground">
-                      {itemCount} item(s)
-                    </div>
-                  </div>
-                </AccordionTrigger>
-                <AccordionContent>
-                  <SaleDetails sale={sale} />
-                </AccordionContent>
-              </AccordionItem>
-            )})}
+            {sales?.map((sale) => (
+              <SaleAccordionItem key={sale.id} sale={sale} />
+            ))}
           </Accordion>
         )}
       </CardContent>

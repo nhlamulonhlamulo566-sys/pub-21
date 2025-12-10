@@ -267,6 +267,11 @@
         "price": {
           "type": "number",
           "description": "Price of the product per unit at the time of sale."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when the sale was created. Denormalized from the parent Sale for easier querying.",
+          "format": "date-time"
         }
       },
       "required": [
@@ -275,7 +280,8 @@
         "productId",
         "productName",
         "quantity",
-        "price"
+        "price",
+        "createdAt"
       ]
     },
     "UserProfile": {

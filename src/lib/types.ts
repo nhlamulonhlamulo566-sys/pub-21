@@ -36,10 +36,12 @@ export type Sale = {
 
 export type SaleItem = {
   id: string;
+  saleId: string;
   productId: string;
   productName: string;
   quantity: number;
   price: number;
+  createdAt: any; // Use 'any' for serverTimestamp, will be Date on fetch
 };
 
 export type UserProfile = {

@@ -1,6 +1,9 @@
-import { redirect } from 'next/navigation';
+import { SignupForm } from '@/components/auth/signup-form';
 
 export default function SignupPage() {
-  // Signup is disabled - administrator will manage user creation
-  redirect('/login');
+  return (
+    <div className="flex min-h-screen w-full items-center justify-center bg-background p-4">
+      <SignupForm />
+    </div>
+  );
 }

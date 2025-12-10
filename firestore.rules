@@ -93,6 +93,20 @@ service cloud.firestore {
       return request.resource.data.saleId == resource.data.saleId;
     }
 
+    // --------------------------------
+    // Collection Group Rules
+    // --------------------------------
+
+    /**
+     * @description Allows any signed-in user to query across all `items` subcollections.
+     * @path /{path=**}/items/{itemId}
+     * @allow A signed-in user (list).
+     * @principle This is necessary for the "Sales by Product" report, which uses a collection group query.
+     */
+    match /{path=**}/items/{itemId} {
+      allow list: if isSignedIn();
+    }
+
 
     // --------------------------------
     // Collection Rules
@@ -107,7 +121,8 @@ service cloud.firestore {
     match /users/{userId} {
       allow create: if isSignedIn() && isOwner(userId);
       allow get: if isSignedIn() && (isOwner(userId) || isAdmin());
-      allow list, update, delete: if isSignedIn() && isAdmin();
+      allow list: if isSignedIn();
+      allow update, delete: if isSignedIn() && isAdmin();
     }
 
 
@@ -218,7 +233,7 @@ service cloud.firestore {
       match /items/{itemId} {
         allow create: if isSignedIn() && isValidSaleItemCreate(saleId);
         allow get: if isSignedIn();
-        allow list: if isSignedIn();
+        // The collection group query rule above handles list operations for reports.
         allow update: if isSignedIn() && isAdmin() && resource != null && isSaleItemRelationImmutable();
         allow delete: if isSignedIn() && isAdmin() && resource != null;
       }
@@ -238,5 +253,3 @@ service cloud.firestore {
     }
   }
 }
-
-    

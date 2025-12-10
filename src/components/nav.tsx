@@ -37,16 +37,13 @@ import { UserProfile } from '@/lib/types';
 import { Skeleton } from './ui/skeleton';
 
 const topLevelLinks = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['administrator', 'sales'] },
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['administrator'] },
   { href: '/pos', label: 'Point of Sale', icon: ShoppingCart, roles: ['administrator', 'sales'] },
-  { href: '/reports', label: 'Reports', icon: BarChart3, roles: ['administrator', 'sales'] },
-  { href: '/sales', label: 'Completed Sales', icon: History, roles: ['administrator'] },
+  { href: '/products', label: 'Products', icon: Package, roles: ['administrator'] },
   { href: '/stock-count', label: 'Stock Count', icon: ScanLine, roles: ['administrator'] },
+  { href: '/reports', label: 'Reports', icon: BarChart3, roles: ['administrator'] },
+  { href: '/sales', label: 'Completed Sales', icon: History, roles: ['administrator'] },
 ];
-
-const productLinks = [
-    { href: '/products', label: 'All Products', icon: Package, roles: ['administrator'] },
-]
 
 const settingsLinks = [
     { href: '/settings/users', label: 'Users', icon: Users, roles: ['administrator'] },
@@ -55,9 +52,8 @@ const settingsLinks = [
 
 export function Nav() {
   const pathname = usePathname();
-  const { state: sidebarState, setOpen, setOpenMobile, isMobile } = useSidebar();
+  const { setOpenMobile, isMobile } = useSidebar();
   const [openCollapsibles, setOpenCollapsibles] = useState({
-      products: pathname.startsWith('/products'),
       settings: pathname.startsWith('/settings'),
   });
 
@@ -73,10 +69,9 @@ export function Nav() {
   const userRole = userProfile?.role || 'sales';
   const isLoading = isUserLoading || isProfileLoading;
 
-  const isProductsActive = pathname.startsWith('/products');
   const isSettingsActive = pathname.startsWith('/settings');
 
-  const handleOpenChange = (collapsible: 'products' | 'settings') => {
+  const handleOpenChange = (collapsible: 'settings') => {
       setOpenCollapsibles(prev => ({ ...prev, [collapsible]: !prev[collapsible] }));
   }
 
@@ -116,36 +111,7 @@ export function Nav() {
       ))}
       
       {userRole === 'administrator' && (
-        <>
-          <Collapsible open={openCollapsibles.products} onOpenChange={() => handleOpenChange('products')}>
-            <SidebarMenuItem>
-              <CollapsibleTrigger asChild>
-                    <SidebarMenuButton
-                        isActive={isProductsActive}
-                        className="w-full justify-start"
-                        tooltip="Products"
-                    >
-                        <Package />
-                        <span>Products</span>
-                        <ChevronRight className={cn("ml-auto h-4 w-4 transition-transform", openCollapsibles.products && "rotate-90")} />
-                    </SidebarMenuButton>
-              </CollapsibleTrigger>
-            </SidebarMenuItem>
-            <CollapsibleContent>
-                {sidebarState === 'expanded' && (
-                    <SidebarMenuSub>
-                        {productLinks.map(link => (
-                            <SidebarMenuSubItem key={link.href} onClick={handleLinkClick}>
-                                <SidebarMenuSubButton asChild isActive={pathname === link.href}>
-                                    <Link href={link.href}>{link.label}</Link>
-                                </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                        ))}
-                    </SidebarMenuSub>
-                )}
-            </CollapsibleContent>
-          </Collapsible>
-          
+        <>          
           <Collapsible open={openCollapsibles.settings} onOpenChange={() => handleOpenChange('settings')}>
             <SidebarMenuItem>
               <CollapsibleTrigger asChild>
@@ -161,17 +127,15 @@ export function Nav() {
               </CollapsibleTrigger>
             </SidebarMenuItem>
             <CollapsibleContent>
-                {sidebarState === 'expanded' && (
-                    <SidebarMenuSub>
-                        {settingsLinks.map(link => (
-                            <SidebarMenuSubItem key={link.href} onClick={handleLinkClick}>
-                                <SidebarMenuSubButton asChild isActive={pathname.startsWith('/settings/users')}>
-                                    <Link href={link.href}>{link.label}</Link>
-                                </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                        ))}
-                    </SidebarMenuSub>
-                )}
+                <SidebarMenuSub>
+                    {settingsLinks.map(link => (
+                        <SidebarMenuSubItem key={link.href} onClick={handleLinkClick}>
+                            <SidebarMenuSubButton asChild isActive={pathname.startsWith('/settings/users')}>
+                                <Link href={link.href}>{link.label}</Link>
+                            </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                    ))}
+                </SidebarMenuSub>
             </CollapsibleContent>
           </Collapsible>
         </>

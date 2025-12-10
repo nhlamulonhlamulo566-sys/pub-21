@@ -7,10 +7,12 @@ import {
   XAxis,
   YAxis,
   Tooltip,
+  LabelList,
 } from 'recharts';
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
@@ -24,6 +26,7 @@ import { useMemoFirebase } from '@/firebase/provider';
 import { collection, query } from 'firebase/firestore';
 import type { Product } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useMemo } from 'react';
 
 const chartConfig = {
   stock: {
@@ -40,50 +43,77 @@ export function InventoryChart() {
   );
   const { data: products, isLoading } = useCollection<Product>(productsQuery);
 
-  const chartData =
-    products?.map((product) => ({
-      name: product.name,
-      stock: product.stock,
-    })) ?? [];
+  const chartData = useMemo(() => {
+    if (!products) return [];
+    return products
+      .map((product) => ({
+        name: product.name,
+        stock: product.stock,
+      }))
+      .sort((a, b) => a.stock - b.stock); // Sort ascending to have lowest at the bottom
+  }, [products]);
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Inventory Levels</CardTitle>
+        <CardDescription>
+          Current stock quantity for each product.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         {isLoading ? (
-          <Skeleton className="h-[350px] w-full" />
+          <Skeleton className="h-[500px] w-full" />
+        ) : !chartData || chartData.length === 0 ? (
+          <div className="flex h-[500px] w-full items-center justify-center">
+            <p className="text-muted-foreground">No inventory data found.</p>
+          </div>
         ) : (
-          <ChartContainer config={chartConfig} className="h-[350px] w-full">
+          <ChartContainer config={chartConfig} className="h-[500px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ bottom: 75 }}>
-                <XAxis
+              <BarChart
+                data={chartData}
+                layout="vertical"
+                margin={{ left: 10, right: 40, top: 10, bottom: 20 }} // Adjusted margins
+              >
+                <YAxis
                   dataKey="name"
+                  type="category"
                   stroke="hsl(var(--foreground))"
                   fontSize={12}
                   tickLine={false}
                   axisLine={false}
+                  width={150}
                   interval={0}
-                  angle={-90}
-                  textAnchor="end"
                 />
-                <YAxis
+                <XAxis
+                  type="number"
                   stroke="hsl(var(--foreground))"
                   fontSize={12}
                   tickLine={false}
                   axisLine={false}
                   tickFormatter={(value) => `${value}`}
+                  allowDecimals={false}
+                  label={{ value: 'Quantity', position: 'insideBottom', offset: -10, style: { fill: 'hsl(var(--foreground))' } }}
                 />
                 <Tooltip
-                  content={<ChartTooltipContent />}
                   cursor={{ fill: 'hsl(var(--muted))' }}
+                  content={<ChartTooltipContent />}
                 />
                 <Bar
                   dataKey="stock"
                   fill="var(--color-stock)"
-                  radius={[4, 4, 0, 0]}
-                />
+                  radius={[0, 4, 4, 0]}
+                  layout="vertical"
+                >
+                  <LabelList
+                    dataKey="stock"
+                    position="right"
+                    offset={8}
+                    className="fill-foreground"
+                    fontSize={12}
+                  />
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </ChartContainer>

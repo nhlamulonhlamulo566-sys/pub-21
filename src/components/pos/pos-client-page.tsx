@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
@@ -147,24 +148,19 @@ export function PosClientPage() {
 
     try {
       await runTransaction(firestore, async (transaction) => {
+        const saleTimestamp = Timestamp.now();
         const productRefs = cart.map(item => doc(firestore, 'products', item.product.id));
         const productDocs = await Promise.all(productRefs.map(ref => transaction.get(ref)));
 
-        // --- All reads are now complete ---
-
         const newSaleRef = doc(collection(firestore, 'sales'));
 
-        // --- All writes start here ---
-
-        // 1. Create Sale Record
         transaction.set(newSaleRef, {
           ...saleDetails,
-          createdAt: Timestamp.now(),
+          createdAt: saleTimestamp,
           salespersonId: user.uid,
           salespersonName: user.displayName || user.email,
         });
 
-        // 2. Create SaleItem Records and Update Inventory
         for (let i = 0; i < cart.length; i++) {
           const item = cart[i];
           const productDoc = productDocs[i];
@@ -187,6 +183,7 @@ export function PosClientPage() {
             productName: item.product.name,
             quantity: item.quantity,
             price: item.price,
+            createdAt: saleTimestamp, // Denormalize timestamp for reporting
           });
 
           const newStock = currentStock - item.quantity;
