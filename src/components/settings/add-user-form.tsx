@@ -37,6 +37,7 @@ import { Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useMemoFirebase } from '@/firebase/provider';
+import type { UserProfile } from '@/lib/types';
 
 const formSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -59,13 +60,12 @@ export function AddUserForm() {
   const router = useRouter();
   const { user: currentUser } = useUser();
 
-  const adminRoleRef = useMemoFirebase(
-    () => (firestore && currentUser ? doc(firestore, 'roles_admin', currentUser.uid) : null),
+  const userProfileRef = useMemoFirebase(
+    () => (firestore && currentUser ? doc(firestore, 'users', currentUser.uid) : null),
     [firestore, currentUser]
   );
-  const { data: adminRoleDoc } = useDoc(adminRoleRef);
-  const isCurrentUserAdmin = !!adminRoleDoc;
-
+  const { data: currentUserProfile } = useDoc<UserProfile>(userProfileRef);
+  const isCurrentUserAdmin = currentUserProfile?.role === 'administrator';
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -240,5 +240,3 @@ export function AddUserForm() {
     </Card>
   );
 }
-
-    
