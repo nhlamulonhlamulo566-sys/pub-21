@@ -6,8 +6,9 @@ import { SidebarProvider } from '@/components/ui/sidebar';
 import { FirebaseClientProvider } from '@/firebase/client-provider';
 
 export const metadata: Metadata = {
-  title: 'PUB 21',
+  title: 'Lynross liquor store',
   description: 'Inventory management and stock counting application',
+  manifest: '/manifest.json',
 };
 
 const ptSans = PT_Sans({
@@ -30,6 +31,7 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=PT+Sans:ital,wght@0,400;0,700;1,400;1,700&display=swap"
           rel="stylesheet"
         />
+        <meta name="theme-color" content="#2a6f68" />
       </head>
       <body className={`${ptSans.variable} font-body antialiased`}>
         <FirebaseClientProvider>

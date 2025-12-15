@@ -1,26 +1,17 @@
+
 import { initializeApp, getApps, App, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
-import { firebaseConfig } from './config';
 
 let adminApp: App;
 
 export function initializeFirebaseAdmin() {
-  if (!getApps().length || !getApps().find(app => app.name === 'admin')) {
-    try {
-      // Initialize the admin app when running in a Google Cloud environment
-      adminApp = initializeApp({
-        projectId: firebaseConfig.projectId,
-      }, 'admin');
-    } catch (e) {
-      console.error(
-        'Automatic initialization failed. Check your environment variables.',
-        e
-      );
-      throw new Error('Failed to initialize Firebase Admin SDK. Ensure your server environment is set up with Application Default Credentials.');
-    }
+  if (getApps().length === 0) {
+    // In a managed environment like App Hosting, initializeApp() with no arguments
+    // will automatically use the available service account credentials.
+    adminApp = initializeApp();
   } else {
-    adminApp = getApps().find(app => app.name === 'admin')!;
+    adminApp = getApps()[0];
   }
 
   return getSdks(adminApp);

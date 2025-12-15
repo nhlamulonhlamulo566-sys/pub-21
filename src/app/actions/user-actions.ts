@@ -1,6 +1,41 @@
+
 'use server';
 
 import { initializeFirebaseAdmin } from '@/firebase/server';
+
+interface CreateUserPayload {
+  email: string;
+  password?: string;
+}
+
+export async function createUserAction(
+  payload: CreateUserPayload
+): Promise<{ success: boolean; uid?: string; error?: string }> {
+  try {
+    const { auth: adminAuth } = initializeFirebaseAdmin();
+    const { ...userToCreate } = payload;
+
+    const userRecord = await adminAuth.createUser(userToCreate);
+    return { success: true, uid: userRecord.uid };
+  } catch (error: any) {
+    console.error('Failed to create user:', error);
+    let errorMessage = 'An unexpected error occurred during user creation.';
+    if (error.code === 'auth/email-already-exists') {
+      errorMessage = 'A user with this email address already exists.';
+    } else if (error.code === 'auth/invalid-password') {
+      errorMessage =
+        'The password must be a string with at least six characters.';
+    } else if (error.code === 'auth/invalid-phone-number') {
+        errorMessage = 'The phone number must be a valid E.164 standard compliant identifier (e.g., +11234567890).';
+    } else if (error.message) {
+        errorMessage = error.message;
+    }
+    return {
+      success: false,
+      error: errorMessage,
+    };
+  }
+}
 
 /**
  * Deletes a user from Firebase Authentication and their associated data in Firestore.

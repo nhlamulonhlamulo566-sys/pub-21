@@ -27,13 +27,23 @@
           "type": "string",
           "description": "URL of the product image.",
           "format": "uri"
+        },
+        "baseProductSku": {
+            "type": "string",
+            "description": "If this product is part of a pack, this is the SKU of the base unit. For the base unit itself, this matches its own SKU."
+        },
+        "containedUnits": {
+            "type": "number",
+            "description": "How many base units this product contains. For a single item, this is 1. For a 6-pack, this is 6."
         }
       },
       "required": [
         "id",
         "name",
         "description",
-        "sku"
+        "sku",
+        "baseProductSku",
+        "containedUnits"
       ]
     },
     "Location": {
@@ -301,10 +311,6 @@
             "administrator",
             "sales"
           ]
-        },
-        "phoneNumber": {
-          "type": "string",
-          "description": "The user's phone number."
         },
         "createdAt": {
           "type": "string",

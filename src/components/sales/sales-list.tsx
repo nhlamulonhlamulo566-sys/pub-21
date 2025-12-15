@@ -21,16 +21,21 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useCollection, useFirestore } from '@/firebase';
+import { useCollection, useDoc, useFirestore, useUser } from '@/firebase';
 import { useMemoFirebase } from '@/firebase/provider';
-import { collection, query, orderBy } from 'firebase/firestore';
-import type { Sale, SaleItem } from '@/lib/types';
+import { collection, query, orderBy, doc } from 'firebase/firestore';
+import type { Sale, SaleItem, UserProfile } from '@/lib/types';
 import { format } from 'date-fns';
 import { Separator } from '../ui/separator';
 import { Badge } from '../ui/badge';
+import { Button } from '../ui/button';
+import { Ban } from 'lucide-react';
+import { useState } from 'react';
+import { VoidSaleDialog } from './void-sale-dialog';
 
-function SaleDetails({ sale }: { sale: Sale }) {
+function SaleDetails({ sale, isAdmin }: { sale: Sale, isAdmin: boolean }) {
   const firestore = useFirestore();
+  const [isVoiding, setIsVoiding] = useState(false);
   const itemsQuery = useMemoFirebase(
     () =>
       firestore
@@ -50,7 +55,8 @@ function SaleDetails({ sale }: { sale: Sale }) {
   }
 
   return (
-    <div className="px-4 py-2 bg-muted/50 rounded-md space-y-4">
+    <>
+      <div className="px-4 py-2 bg-muted/50 rounded-md space-y-4">
        {(!items || items.length === 0) ? (
          <p className="p-4 text-muted-foreground">No items found for this sale.</p>
        ) : (
@@ -75,40 +81,67 @@ function SaleDetails({ sale }: { sale: Sale }) {
             </TableBody>
         </Table>
        )}
-      <Separator />
-      <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm p-2">
-        <div className="flex justify-between">
-          <span className="text-muted-foreground">Subtotal</span>
-          <span className="font-medium">R{sale.subtotal.toFixed(2)}</span>
+        <Separator />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 text-sm p-2">
+          <div className="space-y-2">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Subtotal</span>
+              <span className="font-medium">R{sale.subtotal.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Tax</span>
+               <span className="font-medium">R{sale.tax.toFixed(2)}</span>
+            </div>
+             <div className="flex justify-between pt-2 border-t mt-2">
+              <span className="font-bold">Total</span>
+              <span className="font-bold">R{sale.total.toFixed(2)}</span>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Amount Paid</span>
+              <span className="font-medium">R{sale.amountPaid.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Change Due</span>
+              <span className="font-medium">R{sale.changeDue.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between">
+               <span className="text-muted-foreground">Payment Method</span>
+               <Badge variant="secondary" className="capitalize">{sale.paymentMethod}</Badge>
+            </div>
+          </div>
         </div>
-        <div className="flex justify-between">
-          <span className="text-muted-foreground">Amount Paid</span>
-          <span className="font-medium">R{sale.amountPaid.toFixed(2)}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-muted-foreground">Tax</span>
-           <span className="font-medium">R{sale.tax.toFixed(2)}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-muted-foreground">Change Due</span>
-          <span className="font-medium">R{sale.changeDue.toFixed(2)}</span>
-        </div>
-        <div className="flex justify-between">
-           <span className="text-muted-foreground">Payment Method</span>
-           <Badge variant="secondary" className="capitalize">{sale.paymentMethod}</Badge>
-        </div>
-        <div/>
-         <div className="flex justify-between col-span-2 pt-2 border-t mt-2">
-          <span className="font-bold">Total</span>
-          <span className="font-bold">R{sale.total.toFixed(2)}</span>
-        </div>
+        {isAdmin && sale.status !== 'voided' && (
+           <div className="p-2 border-t mt-2 flex justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsVoiding(true);
+                }}
+              >
+                <Ban className="mr-2 h-3.5 w-3.5" />
+                Void This Sale
+              </Button>
+           </div>
+        )}
       </div>
-    </div>
+      {isVoiding && (
+        <VoidSaleDialog
+          sale={sale}
+          onClose={() => setIsVoiding(false)}
+        />
+      )}
+    </>
   );
 }
 
-function SaleAccordionItem({ sale }: { sale: Sale }) {
+function SaleAccordionItem({ sale, isAdmin }: { sale: Sale, isAdmin: boolean }) {
   const firestore = useFirestore();
+  
   const saleItemsQuery = useMemoFirebase(() => (
       firestore ? query(collection(firestore, `sales/${sale.id}/items`)) : null
   ), [firestore, sale.id]);
@@ -117,25 +150,30 @@ function SaleAccordionItem({ sale }: { sale: Sale }) {
   const itemCount = items?.length ?? 0;
 
   return (
-    <AccordionItem value={sale.id} key={sale.id}>
-      <AccordionTrigger className="hover:no-underline">
-        <div className="grid grid-cols-3 md:grid-cols-4 gap-4 w-full text-sm text-left">
+    <AccordionItem value={sale.id} key={sale.id} disabled={sale.status === 'voided'}>
+      <AccordionTrigger className="hover:no-underline p-4">
+        <div className="grid grid-cols-4 md:grid-cols-5 gap-4 w-full text-sm text-left">
           <div className="font-medium">
             {sale.createdAt
               ? format(sale.createdAt.toDate(), 'yyyy-MM-dd HH:mm')
               : 'N/A'}
           </div>
           <div className="text-muted-foreground">{sale.salespersonName}</div>
-          <div className="text-right font-semibold">
+          <div className="font-semibold text-right">
             R{sale.total.toFixed(2)}
           </div>
           <div className="hidden md:block text-right text-muted-foreground">
             {itemCount} item(s)
           </div>
+           <div className="flex justify-end">
+            {sale.status === 'voided' && (
+              <Badge variant="destructive">Voided</Badge>
+            )}
+          </div>
         </div>
       </AccordionTrigger>
       <AccordionContent>
-        <SaleDetails sale={sale} />
+        <SaleDetails sale={sale} isAdmin={isAdmin} />
       </AccordionContent>
     </AccordionItem>
   );
@@ -143,6 +181,7 @@ function SaleAccordionItem({ sale }: { sale: Sale }) {
 
 export function SalesList() {
   const firestore = useFirestore();
+  const { user } = useUser();
   const salesQuery = useMemoFirebase(
     () =>
       firestore
@@ -151,6 +190,15 @@ export function SalesList() {
     [firestore]
   );
   const { data: sales, isLoading: isLoadingSales } = useCollection<Sale>(salesQuery);
+  const userProfileRef = useMemoFirebase(
+    () => (firestore && user ? doc(firestore, 'users', user.uid) : null),
+    [firestore, user]
+  );
+  const { data: userProfile, isLoading: isProfileLoading } = useDoc<UserProfile>(userProfileRef);
+
+  const isAdmin = userProfile?.role === 'administrator';
+  const isLoading = isLoadingSales || isProfileLoading;
+
 
   return (
     <Card>
@@ -161,7 +209,7 @@ export function SalesList() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {isLoadingSales ? (
+        {isLoading ? (
           <div className="space-y-4">
             {[...Array(5)].map((_, i) => (
               <div key={i} className="flex items-center space-x-4 p-4 border rounded-md">
@@ -175,14 +223,15 @@ export function SalesList() {
           </div>
         ) : (
           <Accordion type="single" collapsible className="w-full">
-             <div className="grid grid-cols-3 md:grid-cols-4 gap-4 w-full text-sm font-semibold px-4 py-2 border-b">
+             <div className="grid grid-cols-4 md:grid-cols-5 gap-4 w-full text-sm font-semibold px-4 py-2 border-b">
               <div>Date</div>
               <div>Salesperson</div>
               <div className="text-right">Total</div>
               <div className="hidden md:block text-right">Items</div>
+              <div className="text-right">Status</div>
             </div>
             {sales?.map((sale) => (
-              <SaleAccordionItem key={sale.id} sale={sale} />
+              <SaleAccordionItem key={sale.id} sale={sale} isAdmin={isAdmin}/>
             ))}
           </Accordion>
         )}

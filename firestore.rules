@@ -119,10 +119,9 @@ service cloud.firestore {
      * @principle Secures user data while allowing admins to manage accounts and users to sign up and view their own profile.
      */
     match /users/{userId} {
-      allow create: if isSignedIn() && isOwner(userId);
-      allow get: if isSignedIn() && (isOwner(userId) || isAdmin());
-      allow list: if isSignedIn();
-      allow update, delete: if isSignedIn() && isAdmin();
+        allow create: if isSignedIn() && isOwner(userId);
+        allow read, write: if isSignedIn() && isAdmin();
+        allow get: if isSignedIn() && isOwner(userId);
     }
 
 
@@ -253,3 +252,5 @@ service cloud.firestore {
     }
   }
 }
+
+    

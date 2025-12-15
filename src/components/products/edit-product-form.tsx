@@ -42,6 +42,8 @@ const formSchema = z.object({
   location: z.string().min(1, 'Location is required'),
   threshold: z.coerce.number().int().min(0, 'Threshold must be a non-negative integer'),
   image: z.any(),
+  baseProductSku: z.string().optional(),
+  containedUnits: z.coerce.number().int().min(1, 'Must contain at least 1 unit').default(1),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -68,6 +70,8 @@ export function EditProductForm({ product }: EditProductFormProps) {
         stock: product.stock,
         location: product.location,
         threshold: product.threshold,
+        baseProductSku: product.baseProductSku || '',
+        containedUnits: product.containedUnits || 1,
     },
   });
 
@@ -102,10 +106,14 @@ export function EditProductForm({ product }: EditProductFormProps) {
     try {
       const productRef = doc(firestore, 'products', product.id);
       const { image, ...productData } = data;
+      
+      const finalBaseProductSku = productData.baseProductSku || productData.sku;
+
       const status = productData.stock > productData.threshold ? 'In Stock' : (productData.stock > 0 ? 'Low Stock' : 'Out of Stock');
       
       updateDocumentNonBlocking(productRef, {
         ...productData,
+        baseProductSku: finalBaseProductSku,
         status,
         imageUrl: imagePreview,
       });
@@ -224,6 +232,9 @@ export function EditProductForm({ product }: EditProductFormProps) {
                         <FormControl>
                             <Input type="number" placeholder="e.g. 25" {...field} />
                         </FormControl>
+                        <FormDescription>
+                            For packs, this is the number of packs, not individual units.
+                        </FormDescription>
                         <FormMessage />
                         </FormItem>
                     )}
@@ -258,6 +269,46 @@ export function EditProductForm({ product }: EditProductFormProps) {
                         </FormItem>
                     )}
                 />
+                 <Card>
+                    <CardHeader>
+                        <CardTitle className="text-lg">Product Bundling</CardTitle>
+                        <CardDescription>Use these fields to link packs to single items.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="grid md:grid-cols-2 gap-4">
+                        <FormField
+                            control={form.control}
+                            name="baseProductSku"
+                            render={({ field }) => (
+                                <FormItem>
+                                <FormLabel>Base Product SKU</FormLabel>
+                                <FormControl>
+                                    <Input placeholder="SKU of the single item" {...field} />
+                                </FormControl>
+                                <FormDescription>
+                                   Leave empty if this is the single item itself.
+                                </FormDescription>
+                                <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="containedUnits"
+                            render={({ field }) => (
+                                <FormItem>
+                                <FormLabel>Contained Units</FormLabel>
+                                <FormControl>
+                                    <Input type="number" {...field} />
+                                </FormControl>
+                                <FormDescription>
+                                   e.g., 1 for a single, 6 for a 6-pack.
+                                </FormDescription>
+                                <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                    </CardContent>
+                </Card>
               </CardContent>
             </Card>
           </div>
@@ -305,7 +356,7 @@ export function EditProductForm({ product }: EditProductFormProps) {
                     'Update Product'
                 )}
             </Button>
-            <Button variant="outline" onClick={() => router.back()}>
+            <Button variant="outline" type="button" onClick={() => router.back()}>
                 Cancel
             </Button>
         </div>

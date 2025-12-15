@@ -12,7 +12,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { Loader2, Trash2 } from 'lucide-react';
+import { Loader2, Trash2, Ban } from 'lucide-react';
 import type { CartItem } from './pos-client-page';
 import { useToast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
@@ -31,6 +31,7 @@ interface PosCartProps {
     paymentMethod: 'cash' | 'card';
   }) => void;
   isProcessingSale: boolean;
+  onCancelSale: () => void;
 }
 
 export function PosCart({
@@ -39,6 +40,7 @@ export function PosCart({
   onRemoveFromCart,
   onCompleteSale,
   isProcessingSale,
+  onCancelSale,
 }: PosCartProps) {
   const [amountPaid, setAmountPaid] = useState(0);
   const [taxRate, setTaxRate] = useState(0); // Default to 0%
@@ -242,20 +244,31 @@ export function PosCart({
             </div>
           </div>
         </div>
-        <Button
-          className="w-full"
-          onClick={handleCompleteSale}
-          disabled={
-            cart.length === 0 ||
-            isProcessingSale ||
-            (total > 0 && amountPaid < total)
-          }
-        >
-          {isProcessingSale && (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          )}
-          Complete Sale
-        </Button>
+        <div className="w-full flex gap-2">
+            <Button
+                variant="destructive"
+                className="w-full"
+                onClick={onCancelSale}
+                disabled={cart.length === 0 || isProcessingSale}
+            >
+                <Ban className="mr-2 h-4 w-4" />
+                Cancel Sale
+            </Button>
+            <Button
+                className="w-full"
+                onClick={handleCompleteSale}
+                disabled={
+                    cart.length === 0 ||
+                    isProcessingSale ||
+                    (total > 0 && amountPaid < total)
+                }
+            >
+                {isProcessingSale && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                Complete Sale
+            </Button>
+        </div>
       </CardFooter>
     </Card>
   );

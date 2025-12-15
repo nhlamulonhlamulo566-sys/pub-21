@@ -40,6 +40,8 @@ const formSchema = z.object({
   location: z.string().min(1, 'Location is required'),
   threshold: z.coerce.number().int().min(0, 'Threshold must be a non-negative integer'),
   image: z.any(),
+  baseProductSku: z.string().optional(),
+  containedUnits: z.coerce.number().int().min(1, 'Must contain at least 1 unit').default(1),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -62,6 +64,8 @@ export function AddProductForm() {
       stock: 0,
       location: '',
       threshold: 10,
+      baseProductSku: '',
+      containedUnits: 1,
     },
   });
 
@@ -96,10 +100,15 @@ export function AddProductForm() {
     try {
       const productsCollection = collection(firestore, 'products');
       const { image, ...productData } = data;
+      
+      // If baseProductSku is empty, it's a base product, so its base SKU is its own SKU.
+      const finalBaseProductSku = productData.baseProductSku || productData.sku;
+
       const status = productData.stock > productData.threshold ? 'In Stock' : (productData.stock > 0 ? 'Low Stock' : 'Out of Stock');
       
       addDocumentNonBlocking(productsCollection, {
         ...productData,
+        baseProductSku: finalBaseProductSku,
         status,
         imageUrl: imagePreview,
       });
@@ -217,6 +226,9 @@ export function AddProductForm() {
                         <FormControl>
                             <Input type="number" placeholder="e.g. 25" {...field} />
                         </FormControl>
+                        <FormDescription>
+                            For packs, this is the number of packs, not individual units.
+                        </FormDescription>
                         <FormMessage />
                         </FormItem>
                     )}
@@ -251,6 +263,46 @@ export function AddProductForm() {
                         </FormItem>
                     )}
                 />
+                 <Card>
+                    <CardHeader>
+                        <CardTitle className="text-lg">Product Bundling</CardTitle>
+                        <CardDescription>Use these fields to link packs to single items.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="grid md:grid-cols-2 gap-4">
+                        <FormField
+                            control={form.control}
+                            name="baseProductSku"
+                            render={({ field }) => (
+                                <FormItem>
+                                <FormLabel>Base Product SKU</FormLabel>
+                                <FormControl>
+                                    <Input placeholder="SKU of the single item" {...field} />
+                                </FormControl>
+                                <FormDescription>
+                                    Leave empty if this is the single item itself.
+                                </FormDescription>
+                                <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="containedUnits"
+                            render={({ field }) => (
+                                <FormItem>
+                                <FormLabel>Contained Units</FormLabel>
+                                <FormControl>
+                                    <Input type="number" {...field} />
+                                </FormControl>
+                                <FormDescription>
+                                   e.g., 1 for a single, 6 for a 6-pack.
+                                </FormDescription>
+                                <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                    </CardContent>
+                </Card>
               </CardContent>
             </Card>
           </div>

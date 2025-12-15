@@ -1,19 +1,18 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
-  initiateEmailSignUp,
-  useAuth,
   useFirestore,
   setDocumentNonBlocking,
   useDoc,
   useUser,
 } from '@/firebase';
-import { doc }from 'firebase/firestore';
+import { doc } from 'firebase/firestore';
+import { createUserAction } from '@/app/actions/user-actions';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -35,33 +34,44 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useMemoFirebase } from '@/firebase/provider';
 import type { UserProfile } from '@/lib/types';
 
-const formSchema = z.object({
-  email: z.string().email('Invalid email address'),
-  phoneNumber: z.string().optional(),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
-  confirmPassword: z.string().min(6, 'Password must be at least 6 characters'),
-  role: z.enum(['administrator', 'sales']),
-}).refine((data) => data.password === data.confirmPassword, {
+const formSchema = z
+  .object({
+    email: z.string().email('Invalid email address'),
+    password: z.string().min(6, 'Password must be at least 6 characters'),
+    confirmPassword: z
+      .string()
+      .min(6, 'Password must be at least 6 characters'),
+    role: z.enum(['administrator', 'sales']),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords don't match",
-    path: ["confirmPassword"],
-});
+    path: ['confirmPassword'],
+  });
 
 type FormData = z.infer<typeof formSchema>;
 
 export function AddUserForm() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
-  const auth = useAuth();
   const firestore = useFirestore();
   const router = useRouter();
   const { user: currentUser } = useUser();
 
   const userProfileRef = useMemoFirebase(
-    () => (firestore && currentUser ? doc(firestore, 'users', currentUser.uid) : null),
+    () =>
+      firestore && currentUser
+        ? doc(firestore, 'users', currentUser.uid)
+        : null,
     [firestore, currentUser]
   );
   const { data: currentUserProfile } = useDoc<UserProfile>(userProfileRef);
@@ -71,7 +81,6 @@ export function AddUserForm() {
     resolver: zodResolver(formSchema),
     defaultValues: {
       email: '',
-      phoneNumber: '',
       password: '',
       confirmPassword: '',
       role: 'sales',
@@ -82,43 +91,50 @@ export function AddUserForm() {
     setIsLoading(true);
     try {
       if (!firestore) {
-          throw new Error("Firestore is not initialized.");
+        throw new Error('Firestore is not initialized.');
       }
 
-      // This is a temporary auth instance to create the user,
-      // it doesn't sign the current admin out.
-      const userCredential = await initiateEmailSignUp(auth, data.email, data.password);
-      const user = userCredential.user;
+      // 1. Create user in Auth via Server Action
+      const result = await createUserAction({
+        email: data.email,
+        password: data.password,
+      });
 
-      // Create a document in the 'users' collection
-      const userDocRef = doc(firestore, 'users', user.uid);
-      setDocumentNonBlocking(userDocRef, {
-        email: user.email,
-        role: data.role,
-        phoneNumber: data.phoneNumber,
-        createdAt: new Date(),
-      }, {});
-      
+      if (!result.success || !result.uid) {
+        throw new Error(result.error || 'Failed to create user in Auth.');
+      }
+
+      const uid = result.uid;
+
+      // 2. Create user profile document in Firestore
+      const userDocRef = doc(firestore, 'users', uid);
+      setDocumentNonBlocking(
+        userDocRef,
+        {
+          email: data.email,
+          role: data.role,
+          createdAt: new Date(),
+        },
+        {}
+      );
+
+      // 3. Grant admin role if selected
       if (data.role === 'administrator') {
-          const adminRoleDocRef = doc(firestore, 'roles_admin', user.uid);
-          // Set an empty object, the existence of the doc grants the role.
-          setDocumentNonBlocking(adminRoleDocRef, {}, {});
+        const adminRoleDocRef = doc(firestore, 'roles_admin', uid);
+        setDocumentNonBlocking(adminRoleDocRef, {}, {});
       }
-      
+
       toast({
         title: 'User Created!',
         description: `Account for ${data.email} has been created with the role: ${data.role}.`,
       });
-      router.push('/settings/users');
+      form.reset(); // Reset form fields to allow adding another user
     } catch (error: any) {
-      console.error(error);
+      console.error('User creation failed:', error);
       toast({
         variant: 'destructive',
         title: 'Uh oh! Something went wrong.',
-        description:
-          error.code === 'auth/email-already-in-use'
-            ? 'This email is already in use.'
-            : 'An unexpected error occurred.',
+        description: error.message || 'An unexpected error occurred.',
       });
     } finally {
       setIsLoading(false);
@@ -155,23 +171,6 @@ export function AddUserForm() {
             />
             <FormField
               control={form.control}
-              name="phoneNumber"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Phone Number (Optional)</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="e.g. +1 234 567 890"
-                      {...field}
-                      autoComplete="off"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
               name="password"
               render={({ field }) => (
                 <FormItem>
@@ -187,7 +186,7 @@ export function AddUserForm() {
                 </FormItem>
               )}
             />
-             <FormField
+            <FormField
               control={form.control}
               name="confirmPassword"
               render={({ field }) => (
@@ -210,7 +209,10 @@ export function AddUserForm() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Role</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                  >
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Select a role" />
@@ -218,7 +220,11 @@ export function AddUserForm() {
                     </FormControl>
                     <SelectContent>
                       <SelectItem value="sales">Sales</SelectItem>
-                      {isCurrentUserAdmin && <SelectItem value="administrator">Administrator</SelectItem>}
+                      {isCurrentUserAdmin && (
+                        <SelectItem value="administrator">
+                          Administrator
+                        </SelectItem>
+                      )}
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -226,13 +232,19 @@ export function AddUserForm() {
               )}
             />
             <div className="flex gap-2 pt-4">
-                <Button type="submit" disabled={isLoading}>
-                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Create User
-                </Button>
-                 <Button variant="outline" type="button" onClick={() => router.back()}>
-                    Cancel
-                </Button>
+              <Button type="submit" disabled={isLoading}>
+                {isLoading && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                Create User
+              </Button>
+              <Button
+                variant="outline"
+                type="button"
+                onClick={() => router.push('/settings/users')}
+              >
+                Done
+              </Button>
             </div>
           </form>
         </Form>

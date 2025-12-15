@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Package2 } from 'lucide-react';
 import {
@@ -11,8 +11,11 @@ import {
 } from '@/components/ui/sidebar';
 import { Header } from '@/components/header';
 import { Nav } from '@/components/nav';
-import { useUser } from '@/firebase';
+import { useUser, useAuth } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useIdleTimeout } from '@/hooks/use-idle-timeout';
+import { IdleTimeoutDialog } from '@/components/auth/idle-timeout-dialog';
+import { signOut } from 'firebase/auth';
 
 export default function DashboardLayout({
   children,
@@ -21,6 +24,25 @@ export default function DashboardLayout({
 }) {
   const { user, isUserLoading } = useUser();
   const router = useRouter();
+  const auth = useAuth();
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  const handleLogout = () => {
+    if (auth) {
+      signOut(auth);
+      router.push('/login');
+    }
+  };
+
+  const { isIdle, stay } = useIdleTimeout({
+    onIdle: handleLogout,
+    idleTimeout: 30 * 60 * 1000, // 30 minutes
+    warningTimeout: 2 * 60 * 1000, // 2 minutes warning
+  });
 
   useEffect(() => {
     if (!isUserLoading && !user) {
@@ -63,26 +85,35 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="grid min-h-screen w-full md:grid-cols-[220px_1fr] lg:grid-cols-[280px_1fr]">
-      <Sidebar variant="sidebar" className="hidden md:flex">
-        <SidebarHeader>
-          <div className="flex h-14 items-center gap-2 border-b px-4 lg:h-[60px] lg:px-6">
-            <Package2 className="h-6 w-6 text-primary" />
-            <span className="text-lg font-semibold text-primary">PUB 21</span>
-          </div>
-        </SidebarHeader>
-        <SidebarContent>
-          <Nav />
-        </SidebarContent>
-      </Sidebar>
-      <div className="flex flex-col">
-        <Header />
-        <SidebarInset>
-          <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6 bg-background">
-            {children}
-          </main>
-        </SidebarInset>
+    <>
+      {isClient && (
+        <IdleTimeoutDialog
+          isIdle={isIdle}
+          onLogout={handleLogout}
+          onStay={stay}
+        />
+      )}
+      <div className="grid min-h-screen w-full md:grid-cols-[220px_1fr] lg:grid-cols-[280px_1fr]">
+        <Sidebar variant="sidebar" className="hidden md:flex">
+          <SidebarHeader>
+            <div className="flex h-14 items-center gap-2 border-b px-4 lg:h-[60px] lg:px-6">
+              <Package2 className="h-6 w-6 text-primary" />
+              <span className="text-lg font-semibold text-primary">Lynross liquor store</span>
+            </div>
+          </SidebarHeader>
+          <SidebarContent>
+            <Nav />
+          </SidebarContent>
+        </Sidebar>
+        <div className="flex flex-col">
+          <Header />
+          <SidebarInset>
+            <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6 bg-background">
+              {children}
+            </main>
+          </SidebarInset>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

@@ -12,6 +12,8 @@ export type Product = {
   threshold: number;
   imageId?: string;
   imageUrl?: string;
+  baseProductSku?: string;
+  containedUnits?: number;
 };
 
 export type StockChange = {
@@ -32,6 +34,7 @@ export type Sale = {
   salespersonId: string;
   salespersonName:string;
   createdAt: any; // Use 'any' for serverTimestamp, will be Date on fetch
+  status?: 'completed' | 'voided';
 };
 
 export type SaleItem = {
@@ -48,6 +51,5 @@ export type UserProfile = {
   id: string;
   email: string;
   role: 'administrator' | 'sales';
-  phoneNumber?: string;
   createdAt: any; // Firestore timestamp
 }
