@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -23,9 +24,8 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Loader2 } from 'lucide-react';
-import { useCollection, useFirestore, updateDocumentNonBlocking } from '@/firebase';
-import { useMemoFirebase } from '@/firebase/provider';
-import { collection, query, doc } from 'firebase/firestore';
+import { useFirestore, updateDocumentNonBlocking } from '@/firebase';
+import { collection, query, doc, getDocs } from 'firebase/firestore';
 import type { Product } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
@@ -60,15 +60,12 @@ export function StockCountForm() {
   const [variances, setVariances] = useState<Record<string, number | null>>({});
   const [discrepancies, setDiscrepancies] = useState<Discrepancy[]>([]);
   const [comparisonDone, setComparisonDone] = useState(false);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(true);
+
 
   const { toast } = useToast();
 
   const firestore = useFirestore();
-  const productsQuery = useMemoFirebase(
-    () => (firestore ? query(collection(firestore, 'products')) : null),
-    [firestore]
-  );
-  const { data: products, isLoading: isLoadingProducts } = useCollection<Product>(productsQuery);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -85,17 +82,37 @@ export function StockCountForm() {
   const { getValues } = form;
 
   useEffect(() => {
-    if (products) {
-      const formItems = products.map((p) => ({
-        id: p.id,
-        name: p.name,
-        recordedCount: p.stock,
-        actualCount: p.stock,
-        threshold: p.threshold,
-      }));
-      replace(formItems);
+    async function fetchInitialStock() {
+      if (!firestore) return;
+      setIsLoadingProducts(true);
+      try {
+        const productsQuery = query(collection(firestore, 'products'));
+        const querySnapshot = await getDocs(productsQuery);
+        const productsData = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Product[];
+        
+        const formItems = productsData.map((p) => ({
+          id: p.id,
+          name: p.name,
+          recordedCount: p.stock,
+          actualCount: p.stock, // Initialize with recorded count
+          threshold: p.threshold,
+        }));
+        replace(formItems);
+      } catch (error) {
+        console.error("Failed to fetch initial stock:", error);
+        toast({
+          variant: 'destructive',
+          title: 'Error fetching products',
+          description: 'Could not load initial inventory data.',
+        })
+      } finally {
+        setIsLoadingProducts(false);
+      }
     }
-  }, [products, replace]);
+    fetchInitialStock();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firestore, replace, toast]);
+
 
   const handleCompareStock = () => {
     const items = getValues('items');
@@ -134,13 +151,19 @@ export function StockCountForm() {
 
     const discrepantItems = data.items.filter(item => item.recordedCount !== item.actualCount);
 
-    if (discrepantItems.length === 0) {
+    if (discrepantItems.length === 0 && discrepancies.length > 0) {
+      // User might have corrected the counts back to the original
       toast({
-        title: 'No Changes Found',
-        description: 'All stock counts match the records. Nothing to update.',
+        title: 'Counts Corrected',
+        description: 'All counts now match the original records. No update needed.',
       });
-      setIsUpdating(false);
-      return;
+    } else if (discrepantItems.length === 0) {
+        toast({
+          title: 'No Changes to Submit',
+          description: 'There are no stock count discrepancies to update.',
+        });
+        setIsUpdating(false);
+        return;
     }
 
     let updatedCount = 0;
@@ -156,6 +179,14 @@ export function StockCountForm() {
       title: 'Stock Updated',
       description: `${updatedCount} product(s) have been updated with the new stock counts.`,
     });
+    
+    // Now, we need to refresh the "recorded" count in the UI to reflect the new state of truth
+    const updatedItems = data.items.map(item => ({
+      ...item,
+      recordedCount: item.actualCount,
+    }));
+    replace(updatedItems);
+    
     setIsUpdating(false);
     setVariances({}); // Reset variances after update
     setDiscrepancies([]);

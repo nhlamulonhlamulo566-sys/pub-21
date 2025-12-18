@@ -44,9 +44,7 @@ export * from './provider';
 export * from './client-provider';
 export * from './firestore/use-collection';
 export * from './firestore/use-doc';
-// `useUser` is exported from `provider` already. Avoid re-exporting it here to prevent
-// conflicting star exports when both `provider` and `auth/use-user` are exported.
-// export * from './auth/use-user';
+export * from './auth/use-user';
 export * from './non-blocking-updates';
 export * from './non-blocking-login';
 export * from './errors';

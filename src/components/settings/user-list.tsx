@@ -1,4 +1,3 @@
-
 'use client';
 import {
   Table,
@@ -16,27 +15,18 @@ import type { UserProfile } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { Button } from '../ui/button';
-import { Trash2 } from 'lucide-react';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { Loader2, Trash2, Edit } from 'lucide-react';
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { deleteUserAction } from '@/app/actions/user-actions';
+import Link from 'next/link';
 
 export function UserList() {
   const firestore = useFirestore();
   const { user: currentUser, isUserLoading } = useUser();
   const { toast } = useToast();
-  
-  const [userToDelete, setUserToDelete] = useState<UserProfile | null>(null);
+
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
 
   const usersQuery = useMemoFirebase(
     () =>
@@ -48,29 +38,42 @@ export function UserList() {
   const { data: users, isLoading: isLoadingUsers } =
     useCollection<UserProfile>(usersQuery);
 
-  const handleDeleteClick = (user: UserProfile) => {
-    setUserToDelete(user);
-  };
+  const handleDelete = async (userToDelete: UserProfile) => {
+    if (!userToDelete || !currentUser) return;
 
-  const handleConfirmDelete = async () => {
-    if (!userToDelete) return;
-
-    const result = await deleteUserAction(userToDelete.id);
-
-    if (result.success) {
+    if (currentUser.uid === userToDelete.id) {
       toast({
-        title: 'User Deleted',
-        description: `The account for "${userToDelete.email}" has been permanently removed.`,
+        variant: 'destructive',
+        title: 'Action Not Allowed',
+        description: 'You cannot delete your own account.',
       });
-    } else {
+      return;
+    }
+
+    setDeletingUserId(userToDelete.id);
+
+    try {
+      const result = await deleteUserAction(userToDelete.id);
+
+      if (result.success) {
+        toast({
+          title: 'User Deleted',
+          description: `The account for "${userToDelete.email}" has been permanently removed.`,
+        });
+      } else {
+        throw new Error(
+          result.error || 'An unknown error occurred during deletion.'
+        );
+      }
+    } catch (error: any) {
       toast({
         variant: 'destructive',
         title: 'Deletion Failed',
-        description: result.error,
+        description: error.message,
       });
+    } finally {
+      setDeletingUserId(null);
     }
-
-    setUserToDelete(null);
   };
 
   const getRoleVariant = (role: string) => {
@@ -107,6 +110,7 @@ export function UserList() {
       <Table>
         <TableHeader>
           <TableRow>
+            <TableHead>Full Name</TableHead>
             <TableHead>Email</TableHead>
             <TableHead>Role</TableHead>
             <TableHead>Date Added</TableHead>
@@ -116,7 +120,8 @@ export function UserList() {
         <TableBody>
           {users?.map((user) => (
             <TableRow key={user.id}>
-              <TableCell className="font-medium">{user.email}</TableCell>
+              <TableCell className="font-medium">{`${user.name} ${user.surname}`}</TableCell>
+              <TableCell>{user.email}</TableCell>
               <TableCell>
                 <Badge
                   variant={getRoleVariant(user.role)}
@@ -130,15 +135,33 @@ export function UserList() {
                   ? format(user.createdAt.toDate(), 'yyyy-MM-dd')
                   : 'N/A'}
               </TableCell>
-              <TableCell className="text-right">
+              <TableCell className="text-right space-x-2">
+                <Button variant="outline" size="icon" asChild>
+                  <Link href={`/settings/users/edit/${user.id}`}>
+                    <Edit className="h-4 w-4" />
+                    <span className="sr-only">Edit user</span>
+                  </Link>
+                </Button>
                 <Button
                   variant="destructive"
                   size="icon"
-                  onClick={() => handleDeleteClick(user)}
-                  disabled={!currentUser || currentUser.uid === user.id}
-                  title={currentUser?.uid === user.id ? "You can't delete your own account" : 'Delete user'}
+                  onClick={() => handleDelete(user)}
+                  disabled={
+                    !currentUser ||
+                    currentUser.uid === user.id ||
+                    deletingUserId === user.id
+                  }
+                  title={
+                    currentUser?.uid === user.id
+                      ? "You can't delete your own account"
+                      : 'Delete user'
+                  }
                 >
-                  <Trash2 className="h-4 w-4" />
+                  {deletingUserId === user.id ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
                   <span className="sr-only">Delete user</span>
                 </Button>
               </TableCell>
@@ -146,26 +169,6 @@ export function UserList() {
           ))}
         </TableBody>
       </Table>
-      <AlertDialog
-        open={!!userToDelete}
-        onOpenChange={(open) => !open && setUserToDelete(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the
-              account for "{userToDelete?.email}" and all associated data.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmDelete}>
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 }

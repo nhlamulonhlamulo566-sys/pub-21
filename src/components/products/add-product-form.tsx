@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -227,7 +228,7 @@ export function AddProductForm() {
                             <Input type="number" placeholder="e.g. 25" {...field} />
                         </FormControl>
                         <FormDescription>
-                            For packs, this is the number of packs, not individual units.
+                            For a single/base item, this is the TOTAL number of individual units available. For packs/cases, this is the number of packs/cases.
                         </FormDescription>
                         <FormMessage />
                         </FormItem>
@@ -279,7 +280,7 @@ export function AddProductForm() {
                                     <Input placeholder="SKU of the single item" {...field} />
                                 </FormControl>
                                 <FormDescription>
-                                    Leave empty if this is the single item itself.
+                                    For a pack/case, enter the SKU of the single item it's made of. For a single item, leave this empty.
                                 </FormDescription>
                                 <FormMessage />
                                 </FormItem>
@@ -295,7 +296,7 @@ export function AddProductForm() {
                                     <Input type="number" {...field} />
                                 </FormControl>
                                 <FormDescription>
-                                   e.g., 1 for a single, 6 for a 6-pack.
+                                   e.g., 1 for a single, 6 for a 6-pack, 24 for a case.
                                 </FormDescription>
                                 <FormMessage />
                                 </FormItem>

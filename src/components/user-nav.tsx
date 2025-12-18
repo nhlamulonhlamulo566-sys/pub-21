@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -35,7 +36,9 @@ export function UserNav() {
     signOut(auth);
   };
 
-  if (isUserLoading || isProfileLoading) {
+  const pageIsLoading = isUserLoading || isProfileLoading;
+
+  if (pageIsLoading) {
     return (
       <Button variant="ghost" className="relative h-8 w-8 rounded-full">
         <Avatar className="h-8 w-8">
@@ -44,6 +47,9 @@ export function UserNav() {
       </Button>
     );
   }
+
+  const userDisplayName = userProfile ? `${userProfile.name} ${userProfile.surname}` : user?.displayName || user?.email;
+  const userInitials = userProfile ? `${userProfile.name?.[0] || ''}${userProfile.surname?.[0] || ''}`.toUpperCase() : user?.email?.[0]?.toUpperCase() ?? 'U';
 
   return (
     <DropdownMenu>
@@ -54,10 +60,10 @@ export function UserNav() {
               <>
                 <AvatarImage
                   src={user.photoURL ?? ''}
-                  alt={user.displayName ?? 'User'}
+                  alt={userDisplayName ?? 'User'}
                 />
                 <AvatarFallback>
-                  {user.email?.[0]?.toUpperCase() ?? 'U'}
+                  {userInitials}
                 </AvatarFallback>
               </>
             ) : (
@@ -72,7 +78,7 @@ export function UserNav() {
             <DropdownMenuLabel className="font-normal">
               <div className="flex flex-col space-y-2">
                 <p className="text-sm font-medium leading-none">
-                  {user.displayName || 'User'}
+                  {userDisplayName}
                 </p>
                 <p className="text-xs leading-none text-muted-foreground">
                   {user.email}
@@ -98,9 +104,6 @@ export function UserNav() {
           <DropdownMenuGroup>
             <DropdownMenuItem asChild>
               <Link href="/login">Log In</Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href="/signup">Sign Up</Link>
             </DropdownMenuItem>
           </DropdownMenuGroup>
         )}

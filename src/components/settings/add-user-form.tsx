@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState } from 'react';
@@ -46,6 +47,8 @@ import type { UserProfile } from '@/lib/types';
 
 const formSchema = z
   .object({
+    name: z.string().min(1, 'Name is required'),
+    surname: z.string().min(1, 'Surname is required'),
     email: z.string().email('Invalid email address'),
     password: z.string().min(6, 'Password must be at least 6 characters'),
     confirmPassword: z
@@ -80,6 +83,8 @@ export function AddUserForm() {
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+      name: '',
+      surname: '',
       email: '',
       password: '',
       confirmPassword: '',
@@ -98,6 +103,7 @@ export function AddUserForm() {
       const result = await createUserAction({
         email: data.email,
         password: data.password,
+        displayName: `${data.name} ${data.surname}`,
       });
 
       if (!result.success || !result.uid) {
@@ -111,6 +117,8 @@ export function AddUserForm() {
       setDocumentNonBlocking(
         userDocRef,
         {
+          name: data.name,
+          surname: data.surname,
           email: data.email,
           role: data.role,
           createdAt: new Date(),
@@ -152,6 +160,42 @@ export function AddUserForm() {
       <CardContent>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                 <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Name</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="John"
+                          {...field}
+                          autoComplete="given-name"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="surname"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Surname</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="Doe"
+                          {...field}
+                          autoComplete="family-name"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+            </div>
             <FormField
               control={form.control}
               name="email"

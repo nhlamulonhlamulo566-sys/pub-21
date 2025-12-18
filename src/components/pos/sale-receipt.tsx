@@ -16,7 +16,9 @@ export const SaleReceipt = React.forwardRef<HTMLDivElement, SaleReceiptProps>(
       <div ref={ref} className="p-8 font-mono text-sm bg-white text-black">
         <div className="text-center space-y-2 mb-8">
           <h1 className="text-2xl font-bold uppercase">Lynross liquor store</h1>
-          <p>
+          <p>Erf 1/111 Rosslyn x01 (Piet Rautenbach Street)</p>
+          <p>(012) 824-0070</p>
+          <p className="pt-2">
             {sale.createdAt
               ? format(sale.createdAt.toDate(), 'yyyy-MM-dd HH:mm:ss')
               : ''}

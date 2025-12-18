@@ -300,6 +300,14 @@
       "type": "object",
       "description": "Represents a user's public profile information.",
       "properties": {
+        "name": {
+          "type": "string",
+          "description": "The user's first name."
+        },
+        "surname": {
+          "type": "string",
+          "description": "The user's last name."
+        },
         "email": {
           "type": "string",
           "description": "The user's email address."
@@ -319,6 +327,8 @@
         }
       },
       "required": [
+        "name",
+        "surname",
         "email",
         "role",
         "createdAt"

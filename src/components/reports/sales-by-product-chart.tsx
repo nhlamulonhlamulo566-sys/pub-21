@@ -45,6 +45,9 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
+const MIN_HEIGHT = 400; // Minimum height for the chart in pixels
+const ITEM_HEIGHT = 35; // Height per item in pixels
+
 // Helper to get unique months from sales data
 const getUniqueMonths = (items: SaleItem[] | null): string[] => {
   if (!items) return [];
@@ -95,6 +98,12 @@ export function SalesByProductChart() {
 
     return Object.values(salesByProduct).sort((a, b) => b.quantity - a.quantity);
   }, [saleItems, selectedMonth]);
+  
+  const chartHeight = useMemo(() => {
+    const numItems = chartData?.length || 0;
+    return Math.max(MIN_HEIGHT, numItems * ITEM_HEIGHT);
+  }, [chartData]);
+
 
   return (
     <Card>
@@ -132,7 +141,7 @@ export function SalesByProductChart() {
             <p className="text-muted-foreground">No sales data found for {format(new Date(`${selectedMonth}-02`), 'MMMM yyyy')}.</p>
           </div>
         ) : (
-          <ChartContainer config={chartConfig} className="h-[500px] w-full">
+          <ChartContainer config={chartConfig} className="w-full" style={{ height: `${chartHeight}px` }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={chartData}
@@ -142,8 +151,7 @@ export function SalesByProductChart() {
                 <YAxis
                   dataKey="name"
                   type="category"
-                  stroke="hsl(var(--foreground))"
-                  fontSize={12}
+                  tick={{ fill: 'hsl(var(--foreground))' }}
                   tickLine={false}
                   axisLine={false}
                   width={150}
@@ -151,8 +159,7 @@ export function SalesByProductChart() {
                 />
                 <XAxis
                   type="number"
-                  stroke="hsl(var(--foreground))"
-                  fontSize={12}
+                  tick={{ fill: 'hsl(var(--foreground))' }}
                   tickLine={false}
                   axisLine={false}
                   tickFormatter={(value) => `${value}`}
@@ -169,7 +176,7 @@ export function SalesByProductChart() {
                   radius={[4, 4, 0, 0]}
                   layout="vertical"
                 >
-                    <LabelList dataKey="quantity" position="right" offset={8} className="fill-foreground" fontSize={12} />
+                    <LabelList dataKey="quantity" position="right" offset={8} style={{ fill: 'hsl(var(--foreground))' }} fontSize={12} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>

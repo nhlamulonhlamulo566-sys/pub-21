@@ -21,20 +21,24 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useCollection, useDoc, useFirestore, useUser } from '@/firebase';
+import { useCollection, useDoc, useFirestore, useUser, useAuth } from '@/firebase';
 import { useMemoFirebase } from '@/firebase/provider';
-import { collection, query, orderBy, doc } from 'firebase/firestore';
+import { collection, query, orderBy, doc, limit } from 'firebase/firestore';
 import type { Sale, SaleItem, UserProfile } from '@/lib/types';
 import { format } from 'date-fns';
 import { Separator } from '../ui/separator';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
-import { Ban } from 'lucide-react';
-import { useState } from 'react';
-import { VoidSaleDialog } from './void-sale-dialog';
+import { Ban, Loader2, Search } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Input } from '../ui/input';
+import { useToast } from '@/hooks/use-toast';
+import { voidSaleAction } from '@/app/actions/sale-actions';
 
-function SaleDetails({ sale, isAdmin }: { sale: Sale, isAdmin: boolean }) {
+function SaleDetails({ sale, isAdmin }: { sale: Sale; isAdmin: boolean }) {
   const firestore = useFirestore();
+  const auth = useAuth();
+  const { toast } = useToast();
   const [isVoiding, setIsVoiding] = useState(false);
   const itemsQuery = useMemoFirebase(
     () =>
@@ -44,6 +48,42 @@ function SaleDetails({ sale, isAdmin }: { sale: Sale, isAdmin: boolean }) {
     [firestore, sale.id]
   );
   const { data: items, isLoading } = useCollection<SaleItem>(itemsQuery);
+
+  const handleVoidSale = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsVoiding(true);
+
+    if (!auth.currentUser) {
+       toast({
+        variant: 'destructive',
+        title: 'Authentication Error',
+        description: 'You must be logged in to perform this action.',
+      });
+      setIsVoiding(false);
+      return;
+    }
+    
+    const idToken = await auth.currentUser.getIdToken();
+
+    const result = await voidSaleAction({ saleId: sale.id, idToken });
+    setIsVoiding(false);
+
+    if (result?.success) {
+      toast({
+        title: 'Sale Voided',
+        description: `Sale ${sale.id.substring(
+          0,
+          7
+        )} has been successfully voided.`,
+      });
+    } else {
+      toast({
+        variant: 'destructive',
+        title: 'Void Failed',
+        description: result?.error || 'An unknown error occurred.',
+      });
+    }
+  };
 
   if (isLoading) {
     return (
@@ -55,87 +95,87 @@ function SaleDetails({ sale, isAdmin }: { sale: Sale, isAdmin: boolean }) {
   }
 
   return (
-    <>
-      <div className="px-4 py-2 bg-muted/50 rounded-md space-y-4">
-       {(!items || items.length === 0) ? (
-         <p className="p-4 text-muted-foreground">No items found for this sale.</p>
-       ) : (
+    <div className="px-4 py-2 bg-muted/50 rounded-md space-y-4">
+      {!items || items.length === 0 ? (
+        <p className="p-4 text-muted-foreground">No items found for this sale.</p>
+      ) : (
         <Table>
-            <TableHeader>
+          <TableHeader>
             <TableRow>
-                <TableHead>Product</TableHead>
-                <TableHead className="text-center">Quantity</TableHead>
-                <TableHead className="text-right">Unit Price</TableHead>
-                <TableHead className="text-right">Total</TableHead>
+              <TableHead>Product</TableHead>
+              <TableHead className="text-center">Quantity</TableHead>
+              <TableHead className="text-right">Unit Price</TableHead>
+              <TableHead className="text-right">Total</TableHead>
             </TableRow>
-            </TableHeader>
-            <TableBody>
+          </TableHeader>
+          <TableBody>
             {items.map((item) => (
-                <TableRow key={item.id}>
+              <TableRow key={item.id}>
                 <TableCell className="font-medium">{item.productName}</TableCell>
                 <TableCell className="text-center">{item.quantity}</TableCell>
-                <TableCell className="text-right">R{item.price.toFixed(2)}</TableCell>
-                <TableCell className="text-right">R{(item.quantity * item.price).toFixed(2)}</TableCell>
-                </TableRow>
+                <TableCell className="text-right">
+                  R{item.price.toFixed(2)}
+                </TableCell>
+                <TableCell className="text-right">
+                  R{(item.quantity * item.price).toFixed(2)}
+                </TableCell>
+              </TableRow>
             ))}
-            </TableBody>
+          </TableBody>
         </Table>
-       )}
-        <Separator />
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 text-sm p-2">
-          <div className="space-y-2">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Subtotal</span>
-              <span className="font-medium">R{sale.subtotal.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Tax</span>
-               <span className="font-medium">R{sale.tax.toFixed(2)}</span>
-            </div>
-             <div className="flex justify-between pt-2 border-t mt-2">
-              <span className="font-bold">Total</span>
-              <span className="font-bold">R{sale.total.toFixed(2)}</span>
-            </div>
+      )}
+      <Separator />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 text-sm p-2">
+        <div className="space-y-2">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Subtotal</span>
+            <span className="font-medium">R{sale.subtotal.toFixed(2)}</span>
           </div>
-          <div className="space-y-2">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Amount Paid</span>
-              <span className="font-medium">R{sale.amountPaid.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Change Due</span>
-              <span className="font-medium">R{sale.changeDue.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between">
-               <span className="text-muted-foreground">Payment Method</span>
-               <Badge variant="secondary" className="capitalize">{sale.paymentMethod}</Badge>
-            </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Tax</span>
+            <span className="font-medium">R{sale.tax.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between pt-2 border-t mt-2">
+            <span className="font-bold">Total</span>
+            <span className="font-bold">R{sale.total.toFixed(2)}</span>
           </div>
         </div>
-        {isAdmin && sale.status !== 'voided' && (
-           <div className="p-2 border-t mt-2 flex justify-end">
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsVoiding(true);
-                }}
-              >
-                <Ban className="mr-2 h-3.5 w-3.5" />
-                Void This Sale
-              </Button>
-           </div>
-        )}
+        <div className="space-y-2">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Amount Paid</span>
+            <span className="font-medium">R{sale.amountPaid.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Change Due</span>
+            <span className="font-medium">R{sale.changeDue.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Payment Method</span>
+            <Badge variant="secondary" className="capitalize">
+              {sale.paymentMethod}
+            </Badge>
+          </div>
+        </div>
       </div>
-      {isVoiding && (
-        <VoidSaleDialog
-          sale={sale}
-          onClose={() => setIsVoiding(false)}
-        />
+      {isAdmin && (
+        <div className="p-2 border-t mt-2 flex justify-end">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8"
+            onClick={handleVoidSale}
+            disabled={sale.status === 'voided' || isVoiding}
+          >
+            {isVoiding ? (
+              <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Ban className="mr-2 h-3.5 w-3.5" />
+            )}
+            Void This Sale
+          </Button>
+        </div>
       )}
-    </>
+    </div>
   );
 }
 
@@ -150,7 +190,7 @@ function SaleAccordionItem({ sale, isAdmin }: { sale: Sale, isAdmin: boolean }) 
   const itemCount = items?.length ?? 0;
 
   return (
-    <AccordionItem value={sale.id} key={sale.id} disabled={sale.status === 'voided'}>
+    <AccordionItem value={sale.id} key={sale.id}>
       <AccordionTrigger className="hover:no-underline p-4">
         <div className="grid grid-cols-4 md:grid-cols-5 gap-4 w-full text-sm text-left">
           <div className="font-medium">
@@ -182,10 +222,12 @@ function SaleAccordionItem({ sale, isAdmin }: { sale: Sale, isAdmin: boolean }) 
 export function SalesList() {
   const firestore = useFirestore();
   const { user } = useUser();
+  const [searchTerm, setSearchTerm] = useState('');
+
   const salesQuery = useMemoFirebase(
     () =>
       firestore
-        ? query(collection(firestore, 'sales'), orderBy('createdAt', 'desc'))
+        ? query(collection(firestore, 'sales'), orderBy('createdAt', 'desc'), limit(50))
         : null,
     [firestore]
   );
@@ -198,6 +240,12 @@ export function SalesList() {
 
   const isAdmin = userProfile?.role === 'administrator';
   const isLoading = isLoadingSales || isProfileLoading;
+  
+  const filteredSales = useMemo(() => {
+    if (!sales) return [];
+    if (!searchTerm) return sales;
+    return sales.filter(sale => sale.id.toLowerCase().includes(searchTerm.toLowerCase()));
+  }, [sales, searchTerm]);
 
 
   return (
@@ -207,6 +255,16 @@ export function SalesList() {
         <CardDescription>
           A log of all completed transactions. Click a sale to view its items.
         </CardDescription>
+         <div className="relative pt-2">
+            <Search className="absolute left-2.5 top-4 h-4 w-4 text-muted-foreground" />
+            <Input
+                placeholder="Search by Sale ID..."
+                className="pl-8 w-full md:w-1/3 lg:w-1/4"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                disabled={isLoading}
+            />
+        </div>
       </CardHeader>
       <CardContent>
         {isLoading ? (
@@ -230,9 +288,14 @@ export function SalesList() {
               <div className="hidden md:block text-right">Items</div>
               <div className="text-right">Status</div>
             </div>
-            {sales?.map((sale) => (
+            {filteredSales.map((sale) => (
               <SaleAccordionItem key={sale.id} sale={sale} isAdmin={isAdmin}/>
             ))}
+            {filteredSales.length === 0 && !isLoading && (
+              <div className="text-center p-8 text-muted-foreground">
+                {searchTerm ? `No sales found for ID "${searchTerm}"` : "No sales have been recorded yet."}
+              </div>
+            )}
           </Accordion>
         )}
       </CardContent>

@@ -6,6 +6,7 @@ import { initializeFirebaseAdmin } from '@/firebase/server';
 interface CreateUserPayload {
   email: string;
   password?: string;
+  displayName?: string;
 }
 
 export async function createUserAction(
@@ -71,6 +72,56 @@ export async function deleteUserAction(
     return {
       success: false,
       error: 'An error occurred while deleting the user. This may be due to insufficient permissions.',
+    };
+  }
+}
+
+
+interface UpdateUserPayload {
+  userId: string;
+  name: string;
+  surname: string;
+  role: 'administrator' | 'sales';
+}
+
+export async function updateUserAction(
+  payload: UpdateUserPayload
+): Promise<{ success: boolean; error?: string }> {
+  const { userId, name, surname, role } = payload;
+
+  try {
+    const { auth: adminAuth, firestore: adminFirestore } = initializeFirebaseAdmin();
+    
+    const userDocRef = adminFirestore.collection('users').doc(userId);
+    const adminRoleDocRef = adminFirestore.collection('roles_admin').doc(userId);
+
+    // Update display name in Firebase Auth
+    await adminAuth.updateUser(userId, {
+      displayName: `${name} ${surname}`,
+    });
+
+    // Update user profile in Firestore
+    await userDocRef.update({
+      name,
+      surname,
+      role,
+    });
+
+    // Manage admin role in the roles_admin collection
+    if (role === 'administrator') {
+      // Add user to admin roles if not already there
+      await adminRoleDocRef.set({});
+    } else {
+      // Remove user from admin roles if they exist
+      await adminRoleDocRef.delete();
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('Failed to update user:', error);
+    return {
+      success: false,
+      error: error.message || 'An unexpected error occurred during user update.',
     };
   }
 }

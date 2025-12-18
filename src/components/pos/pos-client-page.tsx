@@ -1,7 +1,9 @@
+
+
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { useCollection, useFirestore, useUser } from '@/firebase';
+import { useCollection, useFirestore, useUser, useDoc } from '@/firebase';
 import {
   collection,
   query,
@@ -13,7 +15,7 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { useMemoFirebase } from '@/firebase/provider';
-import type { Product, Sale } from '@/lib/types';
+import type { Product, Sale, UserProfile } from '@/lib/types';
 import { PosProductList } from './pos-product-list';
 import { PosCart } from './pos-cart';
 import { useToast } from '@/hooks/use-toast';
@@ -52,7 +54,11 @@ export function PosClientPage() {
     () => (firestore ? query(collection(firestore, 'products')) : null),
     [firestore]
   );
-  const { data: products, isLoading } = useCollection<Product>(productsQuery);
+  const { data: products, isLoading: isLoadingProducts } = useCollection<Product>(productsQuery);
+
+  const userProfileRef = useMemoFirebase(() => (firestore && user ? doc(firestore, 'users', user.uid) : null), [firestore, user]);
+  const { data: userProfile, isLoading: isLoadingProfile } = useDoc<UserProfile>(userProfileRef);
+
 
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isProcessingSale, setIsProcessingSale] = useState(false);
@@ -64,9 +70,14 @@ export function PosClientPage() {
   const receiptRef = useRef(null);
 
   const handlePrint = useReactToPrint({
-    content: useCallback(() => receiptRef.current, []),
+    content: () => receiptRef.current,
   });
 
+  useEffect(() => {
+    if (lastCompletedSale && !isProcessingSale) {
+      handlePrint();
+    }
+  }, [lastCompletedSale, isProcessingSale, handlePrint]);
 
   const addToCart = useCallback(
     (product: Product, price: number) => {
@@ -175,7 +186,7 @@ export function PosClientPage() {
       'id' | 'createdAt' | 'salespersonId' | 'salespersonName'
     >
   ) => {
-    if (!firestore || !user) {
+    if (!firestore || !user || !userProfile) {
       toast({
         variant: 'destructive',
         title: 'Error',
@@ -199,28 +210,30 @@ export function PosClientPage() {
     try {
       // Pre-fetch all product documents that need updates
       const baseUnitsToUpdate: Record<string, number> = {};
-      const allLinkedProductSKUs = new Set<string>();
+      const allBaseSKUs = new Set<string>();
 
       cart.forEach(item => {
         const baseSku = item.product.baseProductSku || item.product.sku;
         const unitsSold = (item.product.containedUnits || 1) * item.quantity;
         baseUnitsToUpdate[baseSku] = (baseUnitsToUpdate[baseSku] || 0) + unitsSold;
-        allLinkedProductSKUs.add(baseSku);
+        allBaseSKUs.add(baseSku);
       });
 
-      // Fetch all necessary product data outside the transaction
+      // Fetch all products that are linked to the base SKUs being sold.
+      // This includes the base products themselves.
       const productsToUpdateSnap = await getDocs(
-        query(collection(firestore, 'products'), where('baseProductSku', 'in', Array.from(allLinkedProductSKUs)))
+        query(collection(firestore, 'products'), where('baseProductSku', 'in', Array.from(allBaseSKUs)))
       );
-      const allProductsData: Record<string, Product[]> = {};
+
+      const allProductsDataByBaseSku: Record<string, Product[]> = {};
       productsToUpdateSnap.docs.forEach(doc => {
           const product = { ...doc.data(), id: doc.id } as Product;
           const baseSku = product.baseProductSku;
           if (baseSku) {
-              if (!allProductsData[baseSku]) {
-                  allProductsData[baseSku] = [];
+              if (!allProductsDataByBaseSku[baseSku]) {
+                  allProductsDataByBaseSku[baseSku] = [];
               }
-              allProductsData[baseSku].push(product);
+              allProductsDataByBaseSku[baseSku].push(product);
           }
       });
 
@@ -230,37 +243,35 @@ export function PosClientPage() {
         const newSaleRef = doc(collection(firestore, 'sales'));
         saleId = newSaleRef.id;
 
-        // Process updates for each base SKU
+        // Process updates for each base SKU affected by the sale
         for (const baseSku in baseUnitsToUpdate) {
           const totalUnitsToRemove = baseUnitsToUpdate[baseSku];
-          let linkedProducts = allProductsData[baseSku];
+          const linkedProducts = allProductsDataByBaseSku[baseSku];
 
           if (!linkedProducts || linkedProducts.length === 0) {
-              const mainProduct = products?.find(p => p.sku === baseSku);
-              if (mainProduct) {
-                  // Initialize the array if it was undefined
-                  linkedProducts = [mainProduct];
-              } else {
-                 throw new Error(`Base product with SKU ${baseSku} not found.`);
-              }
+            throw new Error(`Critical error: Product data for base SKU ${baseSku} could not be found.`);
           }
 
-          // Find the base product to get the current total stock
-          const baseProduct = linkedProducts.find(p => p.sku === baseSku);
-          if (!baseProduct) {
+          // Find the base product to get the current total stock from its perspective.
+          // The base product is the one where its own SKU is the same as the baseProductSku.
+          const baseProductDoc = linkedProducts.find(p => p.sku === p.baseProductSku);
+          if (!baseProductDoc) {
               throw new Error(`Base product definition missing for SKU ${baseSku}.`);
           }
-          const currentTotalStock = baseProduct.stock;
+          const baseProductRef = doc(firestore, 'products', baseProductDoc.id);
+          const baseProductSnap = await transaction.get(baseProductRef);
+          const currentTotalStock = baseProductSnap.data()?.stock ?? 0;
 
           if (totalUnitsToRemove > currentTotalStock) {
-              throw new Error(`Not enough stock for products with base SKU ${baseSku}.`);
+              throw new Error(`Not enough stock for ${baseProductDoc.name}. Required: ${totalUnitsToRemove}, available: ${currentTotalStock}`);
           }
           
           const newTotalStock = currentTotalStock - totalUnitsToRemove;
 
-          // Update all linked products
+          // Update stock for all linked products (including the base product itself)
           for (const productToUpdate of linkedProducts) {
               const productRef = doc(firestore, 'products', productToUpdate.id);
+              // Calculate the new stock for this specific packaging (e.g., how many 6-packs are left)
               const newStockForProduct = Math.floor(newTotalStock / (productToUpdate.containedUnits || 1));
               
               const newStatus =
@@ -277,18 +288,19 @@ export function PosClientPage() {
           }
         }
         
+        const salespersonName = `${userProfile.name} ${userProfile.surname}`;
         const saleData = {
           ...saleDetails,
           id: newSaleRef.id,
           createdAt: saleTimestamp,
           salespersonId: user.uid,
-          salespersonName: user.displayName || user.email,
+          salespersonName: salespersonName,
         };
         // Record the sale
         transaction.set(newSaleRef, saleData);
         finalSaleData = saleData;
 
-        // Record sale items
+        // Record sale items in a subcollection
         for (const item of cart) {
           const saleItemRef = doc(
             collection(firestore, `sales/${newSaleRef.id}/items`)
@@ -303,6 +315,9 @@ export function PosClientPage() {
           });
         }
       });
+
+      setCart([]); // Clear the cart on success
+      
       if (finalSaleData) {
         setLastCompletedSale({ details: finalSaleData, items: cart });
       }
@@ -310,10 +325,8 @@ export function PosClientPage() {
       toast({
         title: 'Sale Complete!',
         description: 'The inventory has been updated and the sale has been recorded.',
-        action: <Button variant="outline" size="sm" onClick={handlePrint}>Print Receipt</Button>
       });
 
-      setCart([]);
     } catch (error: any) {
       console.error('Sale failed:', error);
       toast({
@@ -326,6 +339,8 @@ export function PosClientPage() {
       setIsProcessingSale(false);
     }
   };
+
+  const isLoading = isLoadingProducts || isLoadingProfile;
 
   return (
     <>

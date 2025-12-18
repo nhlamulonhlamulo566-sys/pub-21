@@ -1,18 +1,41 @@
 
-import { initializeApp, getApps, App, cert } from 'firebase-admin/app';
+import { initializeApp, getApps, App, cert, ServiceAccount } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 
 let adminApp: App;
 
 export function initializeFirebaseAdmin() {
-  if (getApps().length === 0) {
-    // In a managed environment like App Hosting, initializeApp() with no arguments
-    // will automatically use the available service account credentials.
-    adminApp = initializeApp();
-  } else {
-    adminApp = getApps()[0];
+  if (getApps().find(app => app?.name === 'admin')) {
+    adminApp = getApps().find(app => app?.name === 'admin')!;
+    return getSdks(adminApp);
   }
+
+  // Check if all required environment variables are present.
+  if (
+    !process.env.FIREBASE_PROJECT_ID ||
+    !process.env.FIREBASE_CLIENT_EMAIL ||
+    !process.env.FIREBASE_PRIVATE_KEY
+  ) {
+    throw new Error(
+      'Firebase Admin SDK credentials are not fully set in .env file. Please provide FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY.'
+    );
+  }
+
+  const serviceAccount: ServiceAccount = {
+    projectId: process.env.FIREBASE_PROJECT_ID,
+    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+    privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+  };
+
+  // Initialize the admin app with a specific name and the explicit credentials.
+  // This prevents it from conflicting with or using any default credentials.
+  adminApp = initializeApp(
+    {
+      credential: cert(serviceAccount),
+    },
+    'admin'
+  );
 
   return getSdks(adminApp);
 }

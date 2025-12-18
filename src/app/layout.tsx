@@ -31,7 +31,6 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=PT+Sans:ital,wght@0,400;0,700;1,400;1,700&display=swap"
           rel="stylesheet"
         />
-        <meta name="theme-color" content="#2a6f68" />
       </head>
       <body className={`${ptSans.variable} font-body antialiased`}>
         <FirebaseClientProvider>

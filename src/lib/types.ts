@@ -1,4 +1,5 @@
 
+
 export type Product = {
   id: string;
   name: string;
@@ -49,6 +50,8 @@ export type SaleItem = {
 
 export type UserProfile = {
   id: string;
+  name: string;
+  surname: string;
   email: string;
   role: 'administrator' | 'sales';
   createdAt: any; // Firestore timestamp

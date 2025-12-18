@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Package2 } from 'lucide-react';
 import {
@@ -11,11 +11,8 @@ import {
 } from '@/components/ui/sidebar';
 import { Header } from '@/components/header';
 import { Nav } from '@/components/nav';
-import { useUser, useAuth } from '@/firebase';
+import { useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useIdleTimeout } from '@/hooks/use-idle-timeout';
-import { IdleTimeoutDialog } from '@/components/auth/idle-timeout-dialog';
-import { signOut } from 'firebase/auth';
 
 export default function DashboardLayout({
   children,
@@ -24,25 +21,6 @@ export default function DashboardLayout({
 }) {
   const { user, isUserLoading } = useUser();
   const router = useRouter();
-  const auth = useAuth();
-  const [isClient, setIsClient] = useState(false);
-
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
-
-  const handleLogout = () => {
-    if (auth) {
-      signOut(auth);
-      router.push('/login');
-    }
-  };
-
-  const { isIdle, stay } = useIdleTimeout({
-    onIdle: handleLogout,
-    idleTimeout: 30 * 60 * 1000, // 30 minutes
-    warningTimeout: 2 * 60 * 1000, // 2 minutes warning
-  });
 
   useEffect(() => {
     if (!isUserLoading && !user) {
@@ -86,13 +64,6 @@ export default function DashboardLayout({
 
   return (
     <>
-      {isClient && (
-        <IdleTimeoutDialog
-          isIdle={isIdle}
-          onLogout={handleLogout}
-          onStay={stay}
-        />
-      )}
       <div className="grid min-h-screen w-full md:grid-cols-[220px_1fr] lg:grid-cols-[280px_1fr]">
         <Sidebar variant="sidebar" className="hidden md:flex">
           <SidebarHeader>

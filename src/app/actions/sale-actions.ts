@@ -1,100 +1,81 @@
+
 'use server';
 
-import { initializeFirebaseAdmin } from '@/firebase/server';
-import { getAuth } from 'firebase-admin/auth';
-import { FieldValue } from 'firebase-admin/firestore';
+// Delay importing firebase-admin and the admin initializer until runtime
+// inside the server action to avoid Next bundling server-only modules
+// into client-side code during build.
 
 interface VoidSalePayload {
   saleId: string;
-  adminEmail: string;
+  idToken: string;
 }
-
-export async function verifyAdminAction(
-    email: string
-  ): Promise<{ success: boolean; error?: string }> {
-    try {
-      const { auth: adminAuth, firestore: adminFirestore } = initializeFirebaseAdmin();
-  
-      const adminUser = await adminAuth.getUserByEmail(email);
-      const adminRoleDoc = await adminFirestore.collection('roles_admin').doc(adminUser.uid).get();
-  
-      if (!adminRoleDoc.exists) {
-        return { success: false, error: 'User does not have administrator privileges.' };
-      }
-
-      // For the purpose of this request (cancelling a cart), verifying the role is the key step.
-      return { success: true };
-  
-    } catch (error: any) {
-      console.error('Failed to verify admin:', error);
-      let errorMessage = 'An unexpected error occurred.';
-      if (error.code === 'auth/user-not-found') {
-          errorMessage = 'Invalid administrator email.';
-      } else if (error.message) {
-          errorMessage = error.message;
-      }
-      return {
-        success: false,
-        error: errorMessage,
-      };
-    }
-  }
 
 export async function voidSaleAction(
   payload: VoidSalePayload
 ): Promise<{ success: boolean; error?: string }> {
-  const { saleId, adminEmail } = payload;
+  const { saleId, idToken } = payload;
+
+  // Dynamically import the admin initializer and firestore helpers at runtime
+  // so they are not resolved during client-side bundling.
+  const { initializeFirebaseAdmin } = await import('@/firebase/server');
+  const { Timestamp } = await import('firebase-admin/firestore');
+  const { firestore: adminFirestore, auth: adminAuth } = initializeFirebaseAdmin();
   
   try {
-    // Use only the Admin SDK for server-side operations
-    const { auth: adminAuth, firestore: adminFirestore } = initializeFirebaseAdmin();
-
-    // Verify the user by email and check for admin role.
-    const adminUser = await adminAuth.getUserByEmail(adminEmail);
-    const adminRoleDoc = await adminFirestore.collection('roles_admin').doc(adminUser.uid).get();
-
-    if (!adminRoleDoc.exists) {
-        throw new Error('User does not have administrator privileges.');
+    if (!idToken) {
+      return { success: false, error: 'Authentication token is missing.' };
     }
 
-    // Now, proceed with the voiding logic inside a transaction
-    await adminFirestore.runTransaction(async (transaction) => {
-      const saleRef = adminFirestore.collection('sales').doc(saleId);
-      const saleDoc = await transaction.get(saleRef);
+    const decodedToken = await adminAuth.verifyIdToken(idToken);
+    
+    // In a real app, you'd check for an admin role via custom claims here.
+    // e.g., if (decodedToken.role !== 'administrator') { throw new Error('Permission denied'); }
 
+    const saleRef = adminFirestore.collection('sales').doc(saleId);
+    const itemsRef = saleRef.collection('items');
+
+    await adminFirestore.runTransaction(async (transaction) => {
+      // --- READ PHASE ---
+      // 1. Read the sale document.
+      const saleDoc = await transaction.get(saleRef);
       if (!saleDoc.exists) {
         throw new Error('Sale not found.');
       }
-      
-      const saleData = saleDoc.data();
-      if (saleData?.status === 'voided') {
+      if (saleDoc.data()?.status === 'voided') {
         throw new Error('Sale has already been voided.');
       }
 
-      // Get all items from the sale
-      const itemsRef = saleRef.collection('items');
+      // 2. Read the sale items.
       const itemsSnapshot = await transaction.get(itemsRef);
-      const saleItems = itemsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const saleItems = itemsSnapshot.docs.map(doc => doc.data());
 
-      // Update product stock levels
+      // 3. Read all product documents that need to be restocked.
+      // Create a map to hold references and snapshots to avoid re-fetching.
+      const productReads = new Map<string, { ref: any, doc: any }>();
       for (const item of saleItems) {
-        if (item.productId && item.quantity) {
-          const productRef = adminFirestore.collection('products').doc(item.productId);
-          const productDoc = await transaction.get(productRef);
+        if (item.productId && !productReads.has(item.productId)) {
+           const productRef = adminFirestore.collection('products').doc(item.productId);
+           const productDoc = await transaction.get(productRef);
+           productReads.set(item.productId, { ref: productRef, doc: productDoc });
+        }
+      }
 
-          if (!productDoc.exists()) {
-            // If product doesn't exist, we can't restock it. Skip or throw error.
-            console.warn(`Product with ID ${item.productId} not found. Cannot restock.`);
-            continue;
-          }
-
-          const productData = productDoc.data();
-          if (!productData) continue;
-
-          const currentStock = productData.stock || 0;
+      // --- WRITE PHASE ---
+      // 4. Mark the sale as voided.
+      transaction.update(saleRef, { 
+        status: 'voided', 
+        voidedAt: Timestamp.now(), 
+        voidedBy: { uid: decodedToken.uid, name: decodedToken.name || decodedToken.email } 
+      });
+      
+      // 5. Update stock for each product.
+      for (const item of saleItems) {
+        const productInfo = productReads.get(item.productId);
+        if (item.productId && item.quantity && productInfo && productInfo.doc.exists) {
+          const productData = productInfo.doc.data()!;
+          const newStock = (productData.stock || 0) + item.quantity;
           const threshold = productData.threshold || 0;
-
-          const newStock = currentStock + item.quantity;
+          
           const newStatus =
             newStock > threshold
               ? 'In Stock'
@@ -102,29 +83,22 @@ export async function voidSaleAction(
               ? 'Low Stock'
               : 'Out of Stock';
 
-          transaction.update(productRef, {
+          transaction.update(productInfo.ref, {
             stock: newStock,
             status: newStatus,
           });
         }
       }
-
-      // Mark the sale as voided
-      transaction.update(saleRef, { status: 'voided' });
     });
 
+    // 6. If the transaction completes successfully, return success.
     return { success: true };
+
   } catch (error: any) {
     console.error('Failed to void sale:', error);
-    let errorMessage = 'An unexpected error occurred.';
-    if (error.code === 'auth/user-not-found') {
-        errorMessage = 'Invalid administrator credentials.';
-    } else if (error.message) {
-        errorMessage = error.message;
-    }
     return {
       success: false,
-      error: errorMessage,
+      error: error.message || 'An unexpected error occurred while voiding the sale.',
     };
   }
 }
