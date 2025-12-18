@@ -220,22 +220,43 @@ export function PosClientPage() {
       });
 
       // Fetch all products that are linked to the base SKUs being sold.
-      // This includes the base products themselves.
-      const productsToUpdateSnap = await getDocs(
-        query(collection(firestore, 'products'), where('baseProductSku', 'in', Array.from(allBaseSKUs)))
-      );
-
+      // This must include both: products where `baseProductSku` references the base,
+      // and the base product documents themselves (where `sku` equals the base SKU).
       const allProductsDataByBaseSku: Record<string, Product[]> = {};
-      productsToUpdateSnap.docs.forEach(doc => {
-          const product = { ...doc.data(), id: doc.id } as Product;
+
+      const baseSkuArray = Array.from(allBaseSKUs);
+      const chunkSize = 10; // Firestore `in` queries are limited to 10 items
+      for (let i = 0; i < baseSkuArray.length; i += chunkSize) {
+        const chunk = baseSkuArray.slice(i, i + chunkSize);
+
+        // Query products that reference the base SKU via `baseProductSku`
+        const byBaseRefSnap = await getDocs(
+          query(collection(firestore, 'products'), where('baseProductSku', 'in', chunk))
+        );
+        byBaseRefSnap.docs.forEach(d => {
+          const product = { ...d.data(), id: d.id } as Product;
           const baseSku = product.baseProductSku;
           if (baseSku) {
-              if (!allProductsDataByBaseSku[baseSku]) {
-                  allProductsDataByBaseSku[baseSku] = [];
-              }
-              allProductsDataByBaseSku[baseSku].push(product);
+            allProductsDataByBaseSku[baseSku] = allProductsDataByBaseSku[baseSku] || [];
+            allProductsDataByBaseSku[baseSku].push(product);
           }
-      });
+        });
+
+        // Query the base products themselves (where sku equals the base SKU)
+        const baseDocsSnap = await getDocs(
+          query(collection(firestore, 'products'), where('sku', 'in', chunk))
+        );
+        baseDocsSnap.docs.forEach(d => {
+          const product = { ...d.data(), id: d.id } as Product;
+          // Treat the base SKU as the key
+          const key = product.sku;
+          allProductsDataByBaseSku[key] = allProductsDataByBaseSku[key] || [];
+          // If the base product doesn't already appear in the list, add it.
+          if (!allProductsDataByBaseSku[key].some(p => p.id === product.id)) {
+            allProductsDataByBaseSku[key].push(product);
+          }
+        });
+      }
 
       let finalSaleData: Sale | null = null;
       await runTransaction(firestore, async (transaction) => {
