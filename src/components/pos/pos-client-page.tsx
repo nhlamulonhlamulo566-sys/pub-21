@@ -243,51 +243,63 @@ export function PosClientPage() {
         const newSaleRef = doc(collection(firestore, 'sales'));
         saleId = newSaleRef.id;
 
-        // Process updates for each base SKU affected by the sale
-        for (const baseSku in baseUnitsToUpdate) {
-          const totalUnitsToRemove = baseUnitsToUpdate[baseSku];
-          const linkedProducts = allProductsDataByBaseSku[baseSku];
+        // FIRST: read all base product documents for every affected base SKU
+        const baseSkuList = Object.keys(baseUnitsToUpdate);
+        const baseProductRefs: Record<string, any> = {};
+        const baseProductSnaps: Record<string, any> = {};
 
+        for (const baseSku of baseSkuList) {
+          const linkedProducts = allProductsDataByBaseSku[baseSku];
           if (!linkedProducts || linkedProducts.length === 0) {
             throw new Error(`Critical error: Product data for base SKU ${baseSku} could not be found.`);
           }
-
-          // Find the base product to get the current total stock from its perspective.
-          // The base product is the one where its own SKU is the same as the baseProductSku.
-          const baseProductDoc = linkedProducts.find(p => p.sku === p.baseProductSku);
+          const baseProductDoc = linkedProducts.find((p) => p.sku === p.baseProductSku);
           if (!baseProductDoc) {
-              throw new Error(`Base product definition missing for SKU ${baseSku}.`);
+            throw new Error(`Base product definition missing for SKU ${baseSku}.`);
           }
-          const baseProductRef = doc(firestore, 'products', baseProductDoc.id);
-          const baseProductSnap = await transaction.get(baseProductRef);
+          baseProductRefs[baseSku] = doc(firestore, 'products', baseProductDoc.id);
+        }
+
+        // Perform all reads first
+        await Promise.all(
+          Object.keys(baseProductRefs).map(async (sku) => {
+            baseProductSnaps[sku] = await transaction.get(baseProductRefs[sku]);
+          })
+        );
+
+        // SECOND: perform all writes (updates) using the previously-read snapshots
+        for (const baseSku of baseSkuList) {
+          const totalUnitsToRemove = baseUnitsToUpdate[baseSku];
+          const linkedProducts = allProductsDataByBaseSku[baseSku];
+
+          const baseProductSnap = baseProductSnaps[baseSku];
           const currentTotalStock = baseProductSnap.data()?.stock ?? 0;
 
           if (totalUnitsToRemove > currentTotalStock) {
-              throw new Error(`Not enough stock for ${baseProductDoc.name}. Required: ${totalUnitsToRemove}, available: ${currentTotalStock}`);
+            throw new Error(`Not enough stock for ${baseSku}. Required: ${totalUnitsToRemove}, available: ${currentTotalStock}`);
           }
-          
+
           const newTotalStock = currentTotalStock - totalUnitsToRemove;
 
-          // Update stock for all linked products (including the base product itself)
           for (const productToUpdate of linkedProducts) {
-              const productRef = doc(firestore, 'products', productToUpdate.id);
-              // Calculate the new stock for this specific packaging (e.g., how many 6-packs are left)
-              const newStockForProduct = Math.floor(newTotalStock / (productToUpdate.containedUnits || 1));
-              
-              const newStatus =
-                  newStockForProduct > (productToUpdate.threshold || 0)
-                    ? 'In Stock'
-                    : newStockForProduct > 0
-                    ? 'Low Stock'
-                    : 'Out of Stock';
+            const productRef = doc(firestore, 'products', productToUpdate.id);
+            const newStockForProduct = Math.floor(newTotalStock / (productToUpdate.containedUnits || 1));
 
-              transaction.update(productRef, {
-                  stock: newStockForProduct,
-                  status: newStatus,
-              });
+            const newStatus =
+              newStockForProduct > (productToUpdate.threshold || 0)
+                ? 'In Stock'
+                : newStockForProduct > 0
+                ? 'Low Stock'
+                : 'Out of Stock';
+
+            transaction.update(productRef, {
+              stock: newStockForProduct,
+              status: newStatus,
+            });
           }
         }
-        
+
+        // THIRD: record the sale and sale items (writes)
         const salespersonName = `${userProfile.name} ${userProfile.surname}`;
         const saleData = {
           ...saleDetails,
@@ -296,15 +308,11 @@ export function PosClientPage() {
           salespersonId: user.uid,
           salespersonName: salespersonName,
         };
-        // Record the sale
         transaction.set(newSaleRef, saleData);
         finalSaleData = saleData;
 
-        // Record sale items in a subcollection
         for (const item of cart) {
-          const saleItemRef = doc(
-            collection(firestore, `sales/${newSaleRef.id}/items`)
-          );
+          const saleItemRef = doc(collection(firestore, `sales/${newSaleRef.id}/items`));
           transaction.set(saleItemRef, {
             saleId: newSaleRef.id,
             productId: item.product.id,
