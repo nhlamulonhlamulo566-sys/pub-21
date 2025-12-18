@@ -68,13 +68,19 @@ export function PosClientPage() {
   const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const scanInputRef = useRef<HTMLInputElement>(null);
   const receiptRef = useRef(null);
+  const lastPrintedSaleIdRef = useRef<string | null>(null);
 
   const handlePrint = useReactToPrint({
     content: () => receiptRef.current,
   });
 
   useEffect(() => {
-    if (lastCompletedSale && !isProcessingSale) {
+    if (
+      lastCompletedSale &&
+      !isProcessingSale &&
+      lastCompletedSale.details?.id !== lastPrintedSaleIdRef.current
+    ) {
+      lastPrintedSaleIdRef.current = lastCompletedSale.details?.id ?? null;
       handlePrint();
     }
   }, [lastCompletedSale, isProcessingSale, handlePrint]);
