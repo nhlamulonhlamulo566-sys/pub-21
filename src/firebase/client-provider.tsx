@@ -17,9 +17,11 @@ export function FirebaseClientProvider({ children }: FirebaseClientProviderProps
     setFirebaseServices(services);
   }, []);
 
-  // If services are not ready (during SSR or hydration), render children without provider.
+  // If services are not ready (during SSR or hydration), don't render children yet.
+  // This prevents downstream components from calling `useAuth`/`useFirestore`
+  // before the Firebase services are available, which would cause runtime errors.
   if (!firebaseServices) {
-    return <>{children}</>;
+    return null;
   }
 
   return (
