@@ -101,7 +101,7 @@ export default function CashUpPage() {
     
     if (users) {
       users.forEach(user => {
-        const name = `${user.firstName} ${user.lastName}`;
+        const name = `${user.name} ${user.surname}`;
         initialData[name] = JSON.parse(JSON.stringify(emptyPeriodTotals));
       });
     }
@@ -114,43 +114,35 @@ export default function CashUpPage() {
     const monthInterval = { start: startOfMonth(now), end: endOfMonth(now) };
 
     return sales.reduce((acc, sale) => {
-      const salespersonName = sale.salesperson;
+      const salespersonName = sale.salespersonName || sale.salespersonId || 'Unknown';
       if (!acc[salespersonName]) {
         acc[salespersonName] = JSON.parse(JSON.stringify(emptyPeriodTotals));
       }
 
-      const saleDate = new Date(sale.date);
+      // Normalize createdAt to JS Date
+      let saleDate: Date;
+      if (!sale.createdAt) {
+        saleDate = new Date();
+      } else if (sale.createdAt.toDate) {
+        saleDate = sale.createdAt.toDate();
+      } else {
+        saleDate = new Date(sale.createdAt);
+      }
       
       const processSale = (period: keyof PeriodTotals, interval: { start: Date; end: Date }) => {
         if (isWithinInterval(saleDate, interval)) {
-          
-          if (sale.status === 'Voided') {
-            acc[salespersonName][period].voids += sale.total;
+          if (sale.status === 'voided') {
+            acc[salespersonName][period].voids += sale.total || 0;
             return;
           }
 
-          if (sale.status === 'Completed' || sale.status === 'Partially Returned') {
-            if (sale.paymentMethod === 'Cash') {
-                acc[salespersonName][period].cash += sale.total;
-            } else if (sale.paymentMethod === 'Card') {
-                acc[salespersonName][period].card += sale.total;
+          if (sale.status === 'completed') {
+            if (sale.paymentMethod === 'cash') {
+              acc[salespersonName][period].cash += sale.total || 0;
+            } else if (sale.paymentMethod === 'card') {
+              acc[salespersonName][period].card += sale.total || 0;
             }
-            acc[salespersonName][period].total += sale.total;
-          }
-          
-          if (sale.status === 'Partially Returned' || sale.status === 'Returned') {
-            const returnedValue = sale.items.reduce((sum, item) => {
-              const returnedQty = item.returnedQuantity || 0;
-              return sum + (returnedQty * item.price);
-            }, 0);
-            
-            const taxRate = (sale.subtotal && sale.subtotal > 0) ? sale.tax / sale.subtotal : 0;
-            const returnedTax = returnedValue * taxRate;
-            
-            const totalReturnedValue = returnedValue + (isNaN(returnedTax) ? 0 : returnedTax);
-            
-            acc[salespersonName][period].returns += totalReturnedValue;
-            acc[salespersonName][period].total -= totalReturnedValue;
+            acc[salespersonName][period].total += sale.total || 0;
           }
         }
       };

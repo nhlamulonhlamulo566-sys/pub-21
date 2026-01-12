@@ -14,6 +14,7 @@ import type { Sale } from '@/lib/types';
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { voidSaleAction } from '@/app/actions/sale-actions';
+import { getAuth } from 'firebase/auth';
 
 interface VoidSaleDialogProps {
   sale: Sale;
@@ -26,20 +27,24 @@ export function VoidSaleDialog({ sale, onClose }: VoidSaleDialogProps) {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleVoidSale = async () => {
-    if (!user?.email) {
+    setIsLoading(true);
+
+    const auth = getAuth();
+    const idToken = await auth.currentUser?.getIdToken();
+
+    if (!idToken) {
+      setIsLoading(false);
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: 'You must be logged in as an administrator.',
+        description: 'Authentication token unavailable. Please sign in again.',
       });
       return;
     }
-    
-    setIsLoading(true);
 
     const result = await voidSaleAction({
-        saleId: sale.id,
-        adminEmail: user.email,
+      saleId: sale.id,
+      idToken,
     });
     
     setIsLoading(false);
