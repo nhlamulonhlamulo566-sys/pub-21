@@ -53,7 +53,7 @@ function SaleDetails({ sale, isAdmin }: { sale: Sale; isAdmin: boolean }) {
     e.stopPropagation();
     setIsVoiding(true);
 
-    if (!auth.currentUser) {
+    if (!auth || !auth.currentUser) {
        toast({
         variant: 'destructive',
         title: 'Authentication Error',
@@ -62,8 +62,13 @@ function SaleDetails({ sale, isAdmin }: { sale: Sale; isAdmin: boolean }) {
       setIsVoiding(false);
       return;
     }
-    
-    const idToken = await auth.currentUser.getIdToken();
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      setIsVoiding(false);
+      return;
+    }
+
+    const idToken = await currentUser.getIdToken();
 
     const result = await voidSaleAction({ saleId: sale.id, idToken });
     setIsVoiding(false);

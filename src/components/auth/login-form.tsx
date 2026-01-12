@@ -51,6 +51,7 @@ export function LoginForm() {
   async function onSubmit(data: FormData) {
     setIsLoading(true);
     try {
+      if (!auth) throw new Error('Auth not initialized');
       await initiateEmailSignIn(auth, data.email, data.password);
       toast({
         title: 'Login Successful!',
@@ -58,6 +59,15 @@ export function LoginForm() {
       });
       router.push('/dashboard');
     } catch (error: any) {
+      if (error.message === 'Auth not initialized') {
+        toast({
+          variant: 'destructive',
+          title: 'Auth Not Ready',
+          description: 'Authentication is not ready. Please refresh the page and try again.'
+        });
+        setIsLoading(false);
+        return;
+      }
       let description = 'An unexpected error occurred. Please try again.';
       if (error.code === 'auth/invalid-credential') {
         description = 'Invalid email or password. Please check your credentials.';

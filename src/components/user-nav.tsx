@@ -33,7 +33,12 @@ export function UserNav() {
     useDoc<UserProfile>(userProfileRef);
 
   const handleLogout = () => {
-    signOut(auth);
+    if (!auth) return;
+    try {
+      signOut(auth);
+    } catch (e) {
+      console.error('Failed to sign out:', e);
+    }
   };
 
   const pageIsLoading = isUserLoading || isProfileLoading;
