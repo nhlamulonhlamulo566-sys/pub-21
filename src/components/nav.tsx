@@ -12,6 +12,7 @@ import {
   History,
   Settings,
   Users,
+  Wallet,
 } from 'lucide-react';
 import {
   SidebarMenu,
@@ -40,6 +41,7 @@ const topLevelLinks = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['administrator'] },
   { href: '/pos', label: 'Point of Sale', icon: ShoppingCart, roles: ['administrator', 'sales'] },
   { href: '/products', label: 'Products', icon: Package, roles: ['administrator'] },
+  { href: '/cash-up', label: 'Cash-Up', icon: Wallet, roles: ['administrator'] },
   { href: '/stock-count', label: 'Stock Count', icon: ScanLine, roles: ['administrator'] },
   { href: '/reports', label: 'Reports', icon: BarChart3, roles: ['administrator'] },
   { href: '/sales', label: 'Completed Sales', icon: History, roles: ['administrator'] },

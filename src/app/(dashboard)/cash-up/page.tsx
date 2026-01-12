@@ -5,8 +5,7 @@ import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query } from 'firebase/firestore';
 import type { Sale, UserProfile } from '@/lib/types';
 import { startOfToday, startOfWeek, startOfMonth, endOfToday, endOfWeek, endOfMonth, isWithinInterval } from 'date-fns';
-import { Loader2, User, Ban, Undo2, Users } from 'lucide-react';
-import PageHeader from '@/components/page-header';
+import { Loader2, User, Ban, Users } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import {
@@ -20,7 +19,6 @@ interface PaymentStats {
   cash: number;
   card: number;
   voids: number;
-  returns: number;
   total: number;
 }
 
@@ -32,7 +30,7 @@ interface PeriodTotals {
 
 type SalespersonTotals = Record<string, PeriodTotals>;
 
-const emptyStats: PaymentStats = { cash: 0, card: 0, voids: 0, returns: 0, total: 0 };
+const emptyStats: PaymentStats = { cash: 0, card: 0, voids: 0, total: 0 };
 const emptyPeriodTotals: PeriodTotals = {
   today: { ...emptyStats },
   thisWeek: { ...emptyStats },
@@ -46,14 +44,21 @@ const StatDisplay = ({ title, amount }: { title: string; amount: number }) => (
   </div>
 );
 
-const PaymentMethodCard = ({ title, amount }: { title: string; amount: number }) => (
+const TotalsCard = ({ title, stats }: { title: string; stats: PaymentStats }) => (
   <Card>
     <CardHeader>
       <CardTitle>{title}</CardTitle>
     </CardHeader>
-    <CardContent>
-      <p className="text-2xl font-bold">R{amount.toFixed(2)}</p>
-      <p className="text-xs text-muted-foreground">Amount for this period</p>
+    <CardContent className="space-y-4">
+      <div className="space-y-2">
+        <StatDisplay title="Cash Payments" amount={stats.cash} />
+        <StatDisplay title="Card Payments" amount={stats.card} />
+      </div>
+      <Separator />
+      <div className="flex justify-between font-bold text-lg">
+        <span>Net Sales</span>
+        <span>R{stats.total.toFixed(2)}</span>
+      </div>
     </CardContent>
   </Card>
 );
@@ -74,35 +79,33 @@ const AdjustmentCard = ({ title, amount, icon: Icon }: { title: string; amount: 
 );
 
 const PeriodSection = ({ title, stats }: { title: string; stats: PaymentStats }) => (
-  <div>
-    <h3 className="mb-4 text-xl font-semibold tracking-tight">{title}</h3>
-    <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-3">
-      <PaymentMethodCard title="Cash Only" amount={stats.cash} />
-      <PaymentMethodCard title="Card Only" amount={stats.card} />
-      <div className="grid gap-4">
-        <AdjustmentCard title="Voids" amount={stats.voids} icon={Ban} />
-        <AdjustmentCard title="Returns" amount={stats.returns} icon={Undo2} />
-      </div>
+    <div>
+        <h3 className="mb-4 text-xl font-semibold tracking-tight">{title}</h3>
+        <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2">
+          <TotalsCard title="Net Sales" stats={stats} />
+          <AdjustmentCard title="Voids" amount={stats.voids} icon={Ban} />
+        </div>
     </div>
-  </div>
-);
+  );
 
 export default function CashUpPage() {
   const firestore = useFirestore();
 
-  const salesQuery = useMemoFirebase(() => query(collection(firestore, 'sales')), [firestore]);
+  const salesQuery = useMemoFirebase(() => (firestore ? query(collection(firestore, 'sales')) : null), [firestore]);
   const { data: sales, isLoading: salesLoading } = useCollection<Sale>(salesQuery);
   
-  const usersQuery = useMemoFirebase(() => query(collection(firestore, 'users')), [firestore]);
+  const usersQuery = useMemoFirebase(() => (firestore ? query(collection(firestore, 'users')) : null), [firestore]);
   const { data: users, isLoading: usersLoading } = useCollection<UserProfile>(usersQuery);
 
   const salespersonTotals: SalespersonTotals = useMemo(() => {
     const initialData: SalespersonTotals = {};
+    const validSalespersonNames = new Set<string>();
     
     if (users) {
       users.forEach(user => {
         const name = `${user.name} ${user.surname}`;
         initialData[name] = JSON.parse(JSON.stringify(emptyPeriodTotals));
+        validSalespersonNames.add(name);
       });
     }
 
@@ -114,35 +117,30 @@ export default function CashUpPage() {
     const monthInterval = { start: startOfMonth(now), end: endOfMonth(now) };
 
     return sales.reduce((acc, sale) => {
-      const salespersonName = sale.salespersonName || sale.salespersonId || 'Unknown';
-      if (!acc[salespersonName]) {
-        acc[salespersonName] = JSON.parse(JSON.stringify(emptyPeriodTotals));
+      const salespersonName = sale.salespersonName;
+      // Only process sales from users who currently exist in the database
+      if (!validSalespersonNames.has(salespersonName)) {
+        return acc;
       }
 
-      // Normalize createdAt to JS Date
-      let saleDate: Date;
-      if (!sale.createdAt) {
-        saleDate = new Date();
-      } else if (sale.createdAt.toDate) {
-        saleDate = sale.createdAt.toDate();
-      } else {
-        saleDate = new Date(sale.createdAt);
-      }
+      if (!sale.createdAt) return acc;
+      const saleDate = sale.createdAt.toDate();
       
       const processSale = (period: keyof PeriodTotals, interval: { start: Date; end: Date }) => {
         if (isWithinInterval(saleDate, interval)) {
+          
           if (sale.status === 'voided') {
-            acc[salespersonName][period].voids += sale.total || 0;
+            acc[salespersonName][period].voids += sale.total;
             return;
           }
 
-          if (sale.status === 'completed') {
+          if (!sale.status || sale.status === 'completed') {
             if (sale.paymentMethod === 'cash') {
-              acc[salespersonName][period].cash += sale.total || 0;
+                acc[salespersonName][period].cash += sale.total;
             } else if (sale.paymentMethod === 'card') {
-              acc[salespersonName][period].card += sale.total || 0;
+                acc[salespersonName][period].card += sale.total;
             }
-            acc[salespersonName][period].total += sale.total || 0;
+            acc[salespersonName][period].total += sale.total;
           }
         }
       };
@@ -164,7 +162,6 @@ export default function CashUpPage() {
             totals[p].cash += personTotals[p].cash;
             totals[p].card += personTotals[p].card;
             totals[p].voids += personTotals[p].voids;
-            totals[p].returns += personTotals[p].returns;
             totals[p].total += personTotals[p].total;
         });
     });
@@ -185,32 +182,29 @@ export default function CashUpPage() {
 
   return (
     <>
-      <PageHeader title="Cash-Up Summary" />
-      <div className="space-y-8">
+      <div className="flex items-center">
+        <h1 className="text-lg font-semibold md:text-2xl">Cash-Up Summary</h1>
+      </div>
+      <div className="space-y-8 mt-4">
         <div>
             <h2 className="text-2xl font-bold tracking-tight mb-4">Per-Salesperson Breakdown</h2>
             <Accordion type="multiple" className="w-full space-y-4">
             {sortedSalespersons.map(salesperson => (
-              <AccordionItem value={salesperson} key={salesperson} className="border rounded-lg">
+                <AccordionItem value={salesperson} key={salesperson} className="border rounded-lg">
                 <AccordionTrigger className="px-6 py-4 hover:no-underline">
-                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3">
                     <User className="h-5 w-5 text-primary" />
                     <span className="font-semibold text-lg">{salesperson}</span>
-                  </div>
+                    </div>
                 </AccordionTrigger>
                 <AccordionContent className="p-6 pt-0 space-y-8">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Salesperson:</p>
-                    <h3 className="text-xl font-bold">{salesperson}</h3>
-                  </div>
-
-                  <PeriodSection title="Today's Summary" stats={salespersonTotals[salesperson].today} />
-                  <Separator />
-                  <PeriodSection title="This Week's Summary" stats={salespersonTotals[salesperson].thisWeek} />
-                  <Separator />
-                  <PeriodSection title="This Month's Summary" stats={salespersonTotals[salesperson].thisMonth} />
+                    <PeriodSection title="Today's Summary" stats={salespersonTotals[salesperson].today} />
+                    <Separator />
+                    <PeriodSection title="This Week's Summary" stats={salespersonTotals[salesperson].thisWeek} />
+                    <Separator />
+                    <PeriodSection title="This Month's Summary" stats={salespersonTotals[salesperson].thisMonth} />
                 </AccordionContent>
-              </AccordionItem>
+                </AccordionItem>
             ))}
             </Accordion>
         </div>

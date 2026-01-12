@@ -12,6 +12,9 @@ interface SaleReceiptProps {
 
 export const SaleReceipt = React.forwardRef<HTMLDivElement, SaleReceiptProps>(
   ({ sale, items }, ref) => {
+    if (!sale) {
+      return <div ref={ref} />;
+    }
     return (
       <div ref={ref} className="p-8 font-mono text-sm bg-white text-black">
         <div className="text-center space-y-2 mb-8">

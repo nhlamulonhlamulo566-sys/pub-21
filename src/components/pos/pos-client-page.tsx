@@ -12,7 +12,8 @@ import {
   Timestamp,
   where,
   getDocs,
-  writeBatch,
+  DocumentReference,
+  DocumentSnapshot,
 } from 'firebase/firestore';
 import { useMemoFirebase } from '@/firebase/provider';
 import type { Product, Sale, UserProfile } from '@/lib/types';
@@ -68,22 +69,11 @@ export function PosClientPage() {
   const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const scanInputRef = useRef<HTMLInputElement>(null);
   const receiptRef = useRef(null);
-  const lastPrintedSaleIdRef = useRef<string | null>(null);
 
   const handlePrint = useReactToPrint({
     content: () => receiptRef.current,
+    onAfterPrint: () => setLastCompletedSale(null),
   });
-
-  useEffect(() => {
-    if (
-      lastCompletedSale &&
-      !isProcessingSale &&
-      lastCompletedSale.details?.id !== lastPrintedSaleIdRef.current
-    ) {
-      lastPrintedSaleIdRef.current = lastCompletedSale.details?.id ?? null;
-      handlePrint();
-    }
-  }, [lastCompletedSale, isProcessingSale, handlePrint]);
 
   const addToCart = useCallback(
     (product: Product, price: number) => {
@@ -226,43 +216,22 @@ export function PosClientPage() {
       });
 
       // Fetch all products that are linked to the base SKUs being sold.
-      // This must include both: products where `baseProductSku` references the base,
-      // and the base product documents themselves (where `sku` equals the base SKU).
+      // This includes the base products themselves.
+      const productsToUpdateSnap = await getDocs(
+        query(collection(firestore, 'products'), where('baseProductSku', 'in', Array.from(allBaseSKUs)))
+      );
+
       const allProductsDataByBaseSku: Record<string, Product[]> = {};
-
-      const baseSkuArray = Array.from(allBaseSKUs);
-      const chunkSize = 10; // Firestore `in` queries are limited to 10 items
-      for (let i = 0; i < baseSkuArray.length; i += chunkSize) {
-        const chunk = baseSkuArray.slice(i, i + chunkSize);
-
-        // Query products that reference the base SKU via `baseProductSku`
-        const byBaseRefSnap = await getDocs(
-          query(collection(firestore, 'products'), where('baseProductSku', 'in', chunk))
-        );
-        byBaseRefSnap.docs.forEach(d => {
-          const product = { ...d.data(), id: d.id } as Product;
+      productsToUpdateSnap.docs.forEach(doc => {
+          const product = { ...doc.data(), id: doc.id } as Product;
           const baseSku = product.baseProductSku;
           if (baseSku) {
-            allProductsDataByBaseSku[baseSku] = allProductsDataByBaseSku[baseSku] || [];
-            allProductsDataByBaseSku[baseSku].push(product);
+              if (!allProductsDataByBaseSku[baseSku]) {
+                  allProductsDataByBaseSku[baseSku] = [];
+              }
+              allProductsDataByBaseSku[baseSku].push(product);
           }
-        });
-
-        // Query the base products themselves (where sku equals the base SKU)
-        const baseDocsSnap = await getDocs(
-          query(collection(firestore, 'products'), where('sku', 'in', chunk))
-        );
-        baseDocsSnap.docs.forEach(d => {
-          const product = { ...d.data(), id: d.id } as Product;
-          // Treat the base SKU as the key
-          const key = product.sku;
-          allProductsDataByBaseSku[key] = allProductsDataByBaseSku[key] || [];
-          // If the base product doesn't already appear in the list, add it.
-          if (!allProductsDataByBaseSku[key].some(p => p.id === product.id)) {
-            allProductsDataByBaseSku[key].push(product);
-          }
-        });
-      }
+      });
 
       let finalSaleData: Sale | null = null;
       await runTransaction(firestore, async (transaction) => {
@@ -270,63 +239,59 @@ export function PosClientPage() {
         const newSaleRef = doc(collection(firestore, 'sales'));
         saleId = newSaleRef.id;
 
-        // FIRST: read all base product documents for every affected base SKU
-        const baseSkuList = Object.keys(baseUnitsToUpdate);
-        const baseProductRefs: Record<string, any> = {};
-        const baseProductSnaps: Record<string, any> = {};
+        // --- READ PHASE ---
+        const productSnapshots = new Map<string, DocumentSnapshot>();
 
-        for (const baseSku of baseSkuList) {
-          const linkedProducts = allProductsDataByBaseSku[baseSku];
-          if (!linkedProducts || linkedProducts.length === 0) {
-            throw new Error(`Critical error: Product data for base SKU ${baseSku} could not be found.`);
-          }
-          const baseProductDoc = linkedProducts.find((p) => p.sku === p.baseProductSku);
-          if (!baseProductDoc) {
-            throw new Error(`Base product definition missing for SKU ${baseSku}.`);
-          }
-          baseProductRefs[baseSku] = doc(firestore, 'products', baseProductDoc.id);
+        for (const baseSku in baseUnitsToUpdate) {
+            const linkedProducts = allProductsDataByBaseSku[baseSku];
+            if (!linkedProducts || linkedProducts.length === 0) {
+                throw new Error(`Critical error: Product data for base SKU ${baseSku} could not be found.`);
+            }
+            const baseProductDoc = linkedProducts.find(p => p.sku === p.baseProductSku);
+            if (!baseProductDoc) {
+                throw new Error(`Base product definition missing for SKU ${baseSku}.`);
+            }
+            const baseProductRef = doc(firestore, 'products', baseProductDoc.id);
+            const baseProductSnap = await transaction.get(baseProductRef);
+            productSnapshots.set(baseProductDoc.id, baseProductSnap);
         }
 
-        // Perform all reads first
-        await Promise.all(
-          Object.keys(baseProductRefs).map(async (sku) => {
-            baseProductSnaps[sku] = await transaction.get(baseProductRefs[sku]);
-          })
-        );
-
-        // SECOND: perform all writes (updates) using the previously-read snapshots
-        for (const baseSku of baseSkuList) {
+        // --- WRITE PHASE ---
+        for (const baseSku in baseUnitsToUpdate) {
           const totalUnitsToRemove = baseUnitsToUpdate[baseSku];
           const linkedProducts = allProductsDataByBaseSku[baseSku];
-
-          const baseProductSnap = baseProductSnaps[baseSku];
-          const currentTotalStock = baseProductSnap.data()?.stock ?? 0;
-
-          if (totalUnitsToRemove > currentTotalStock) {
-            throw new Error(`Not enough stock for ${baseSku}. Required: ${totalUnitsToRemove}, available: ${currentTotalStock}`);
+          const baseProductDef = linkedProducts.find(p => p.sku === p.baseProductSku)!;
+          
+          const baseProductSnap = productSnapshots.get(baseProductDef.id);
+          if (!baseProductSnap || !baseProductSnap.exists()) {
+             throw new Error(`Product ${baseProductDef.name} not found during transaction.`);
           }
 
+          const currentTotalStock = baseProductSnap.data()?.stock ?? 0;
+          if (totalUnitsToRemove > currentTotalStock) {
+              throw new Error(`Not enough stock for ${baseProductDef.name}. Required: ${totalUnitsToRemove}, available: ${currentTotalStock}`);
+          }
+          
           const newTotalStock = currentTotalStock - totalUnitsToRemove;
 
           for (const productToUpdate of linkedProducts) {
-            const productRef = doc(firestore, 'products', productToUpdate.id);
-            const newStockForProduct = Math.floor(newTotalStock / (productToUpdate.containedUnits || 1));
+              const productRef = doc(firestore, 'products', productToUpdate.id);
+              const newStockForProduct = Math.floor(newTotalStock / (productToUpdate.containedUnits || 1));
+              
+              const newStatus =
+                  newStockForProduct > (productToUpdate.threshold || 0)
+                    ? 'In Stock'
+                    : newStockForProduct > 0
+                    ? 'Low Stock'
+                    : 'Out of Stock';
 
-            const newStatus =
-              newStockForProduct > (productToUpdate.threshold || 0)
-                ? 'In Stock'
-                : newStockForProduct > 0
-                ? 'Low Stock'
-                : 'Out of Stock';
-
-            transaction.update(productRef, {
-              stock: newStockForProduct,
-              status: newStatus,
-            });
+              transaction.update(productRef, {
+                  stock: newStockForProduct,
+                  status: newStatus,
+              });
           }
         }
-
-        // THIRD: record the sale and sale items (writes)
+        
         const salespersonName = `${userProfile.name} ${userProfile.surname}`;
         const saleData = {
           ...saleDetails,
@@ -335,11 +300,14 @@ export function PosClientPage() {
           salespersonId: user.uid,
           salespersonName: salespersonName,
         };
+
         transaction.set(newSaleRef, saleData);
         finalSaleData = saleData;
 
         for (const item of cart) {
-          const saleItemRef = doc(collection(firestore, `sales/${newSaleRef.id}/items`));
+          const saleItemRef = doc(
+            collection(firestore, `sales/${newSaleRef.id}/items`)
+          );
           transaction.set(saleItemRef, {
             saleId: newSaleRef.id,
             productId: item.product.id,
@@ -351,10 +319,11 @@ export function PosClientPage() {
         }
       });
 
-      setCart([]); // Clear the cart on success
+      const completedSaleItems = [...cart];
+      setCart([]);
       
       if (finalSaleData) {
-        setLastCompletedSale({ details: finalSaleData, items: cart });
+        setLastCompletedSale({ details: finalSaleData, items: completedSaleItems });
       }
 
       toast({
@@ -386,7 +355,7 @@ export function PosClientPage() {
             <Button
                 variant="outline"
                 onClick={handlePrint}
-                disabled={!lastCompletedSale}
+                disabled={!lastCompletedSale && cart.length === 0}
                 >
                 <Printer className="mr-2 h-4 w-4" />
                 Print Last Receipt
@@ -441,11 +410,11 @@ export function PosClientPage() {
         </AlertDialogContent>
       </AlertDialog>
       <div className="hidden">
-        {lastCompletedSale && (
+        {(lastCompletedSale || cart.length > 0) && (
           <SaleReceipt
             ref={receiptRef}
-            sale={lastCompletedSale.details}
-            items={lastCompletedSale.items}
+            sale={(lastCompletedSale?.details) as Sale}
+            items={lastCompletedSale?.items || cart}
           />
         )}
       </div>

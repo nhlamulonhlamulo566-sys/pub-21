@@ -100,12 +100,11 @@ export function PosProductList({
                   <CardFooter>
                     <Button
                       className="w-full"
-                      onClick={() => product.stock && product.stock > 0 && onAddToCart(product, prices[product.id] ?? product.price ?? 0)}
-                      disabled={!(product.stock && product.stock > 0)}
-                      aria-disabled={!(product.stock && product.stock > 0)}
+                      onClick={() => onAddToCart(product, prices[product.id] ?? product.price ?? 0)}
+                      disabled={product.stock === 0}
                     >
                       <PlusCircle className="mr-2 h-4 w-4" />
-                      {product.stock && product.stock > 0 ? 'Add to Cart' : 'Out of Stock'}
+                      Add to Cart
                     </Button>
                   </CardFooter>
                 </Card>
