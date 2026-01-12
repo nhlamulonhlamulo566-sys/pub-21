@@ -46,21 +46,14 @@ const StatDisplay = ({ title, amount }: { title: string; amount: number }) => (
   </div>
 );
 
-const TotalsCard = ({ title, stats }: { title: string; stats: PaymentStats }) => (
+const PaymentMethodCard = ({ title, amount }: { title: string; amount: number }) => (
   <Card>
     <CardHeader>
       <CardTitle>{title}</CardTitle>
     </CardHeader>
-    <CardContent className="space-y-4">
-      <div className="space-y-2">
-        <StatDisplay title="Cash Payments" amount={stats.cash} />
-        <StatDisplay title="Card Payments" amount={stats.card} />
-      </div>
-      <Separator />
-      <div className="flex justify-between font-bold text-lg">
-        <span>Net Sales</span>
-        <span>R{stats.total.toFixed(2)}</span>
-      </div>
+    <CardContent>
+      <p className="text-2xl font-bold">R{amount.toFixed(2)}</p>
+      <p className="text-xs text-muted-foreground">Amount for this period</p>
     </CardContent>
   </Card>
 );
@@ -81,15 +74,18 @@ const AdjustmentCard = ({ title, amount, icon: Icon }: { title: string; amount: 
 );
 
 const PeriodSection = ({ title, stats }: { title: string; stats: PaymentStats }) => (
-    <div>
-        <h3 className="mb-4 text-xl font-semibold tracking-tight">{title}</h3>
-        <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-3">
-          <TotalsCard title="Net Sales" stats={stats} />
-          <AdjustmentCard title="Voids" amount={stats.voids} icon={Ban} />
-          <AdjustmentCard title="Returns" amount={stats.returns} icon={Undo2} />
-        </div>
+  <div>
+    <h3 className="mb-4 text-xl font-semibold tracking-tight">{title}</h3>
+    <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-3">
+      <PaymentMethodCard title="Cash Only" amount={stats.cash} />
+      <PaymentMethodCard title="Card Only" amount={stats.card} />
+      <div className="grid gap-4">
+        <AdjustmentCard title="Voids" amount={stats.voids} icon={Ban} />
+        <AdjustmentCard title="Returns" amount={stats.returns} icon={Undo2} />
+      </div>
     </div>
-  );
+  </div>
+);
 
 export default function CashUpPage() {
   const firestore = useFirestore();
@@ -203,21 +199,26 @@ export default function CashUpPage() {
             <h2 className="text-2xl font-bold tracking-tight mb-4">Per-Salesperson Breakdown</h2>
             <Accordion type="multiple" className="w-full space-y-4">
             {sortedSalespersons.map(salesperson => (
-                <AccordionItem value={salesperson} key={salesperson} className="border rounded-lg">
+              <AccordionItem value={salesperson} key={salesperson} className="border rounded-lg">
                 <AccordionTrigger className="px-6 py-4 hover:no-underline">
-                    <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3">
                     <User className="h-5 w-5 text-primary" />
                     <span className="font-semibold text-lg">{salesperson}</span>
-                    </div>
+                  </div>
                 </AccordionTrigger>
                 <AccordionContent className="p-6 pt-0 space-y-8">
-                    <PeriodSection title="Today's Summary" stats={salespersonTotals[salesperson].today} />
-                    <Separator />
-                    <PeriodSection title="This Week's Summary" stats={salespersonTotals[salesperson].thisWeek} />
-                    <Separator />
-                    <PeriodSection title="This Month's Summary" stats={salespersonTotals[salesperson].thisMonth} />
+                  <div>
+                    <p className="text-sm text-muted-foreground">Salesperson:</p>
+                    <h3 className="text-xl font-bold">{salesperson}</h3>
+                  </div>
+
+                  <PeriodSection title="Today's Summary" stats={salespersonTotals[salesperson].today} />
+                  <Separator />
+                  <PeriodSection title="This Week's Summary" stats={salespersonTotals[salesperson].thisWeek} />
+                  <Separator />
+                  <PeriodSection title="This Month's Summary" stats={salespersonTotals[salesperson].thisMonth} />
                 </AccordionContent>
-                </AccordionItem>
+              </AccordionItem>
             ))}
             </Accordion>
         </div>
