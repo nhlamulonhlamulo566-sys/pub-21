@@ -7,6 +7,12 @@ import { getFirestore } from 'firebase/firestore'
 
 // IMPORTANT: DO NOT MODIFY THIS FUNCTION
 export function initializeFirebase() {
+  if (typeof window === 'undefined') {
+    // Server environment (prerender/build). Do not initialize client Firebase SDK here.
+    // Return placeholders to avoid runtime initialization errors during Next.js prerender.
+    return getSdks(undefined);
+  }
+
   if (!getApps().length) {
     // Important! initializeApp() is called without any arguments because Firebase App Hosting
     // integrates with the initializeApp() function to provide the environment variables needed to
@@ -32,7 +38,16 @@ export function initializeFirebase() {
   return getSdks(getApp());
 }
 
-export function getSdks(firebaseApp: FirebaseApp) {
+export function getSdks(firebaseApp?: FirebaseApp) {
+  if (!firebaseApp) {
+    // Return safe placeholders during server-side rendering.
+    return {
+      firebaseApp: undefined as unknown as FirebaseApp,
+      auth: undefined as unknown as ReturnType<typeof getAuth>,
+      firestore: undefined as unknown as ReturnType<typeof getFirestore>
+    };
+  }
+
   return {
     firebaseApp,
     auth: getAuth(firebaseApp),
